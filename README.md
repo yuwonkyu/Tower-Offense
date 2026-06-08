@@ -78,6 +78,7 @@
 | 05 | [카드 - 글로벌 버프](docs/design/05-cards-global-buffs.md) | 글로벌 버프 카드 |
 | 06 | [수익화 전략](docs/design/06-monetization.md) | IAA + IAP 구조 |
 | 07 | [카드 시스템 룰 & 광고 통합](docs/design/07-card-system-rules.md) | 등장/리롤/광고 트리거 |
+| 08 | [적 측 - 타워](docs/design/08-enemy-tower.md) | 타워 HP 곡선, 피해 공식 |
 | ✅ | [진행 현황](docs/design/PROGRESS.md) | 작업 상태 & 결정 로그 |
 
 ---
