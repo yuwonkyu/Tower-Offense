@@ -79,6 +79,9 @@
 | 06 | [수익화 전략](docs/design/06-monetization.md) | IAA + IAP 구조 |
 | 07 | [카드 시스템 룰 & 광고 통합](docs/design/07-card-system-rules.md) | 등장/리롤/광고 트리거 |
 | 08 | [적 측 - 타워](docs/design/08-enemy-tower.md) | 타워 HP 곡선, 피해 공식 |
+| 09 | [적 측 - 영웅](docs/design/09-enemy-heroes.md) | 기사/마법사/엘프궁수 |
+| 10 | [적 측 - 방어 유닛](docs/design/10-enemy-units.md) | 생성률/구성/스탯 |
+| 11 | [구조물](docs/design/11-structures.md) | 성벽/바리케이트/트랩 |
 | ✅ | [진행 현황](docs/design/PROGRESS.md) | 작업 상태 & 결정 로그 |
 
 ---
