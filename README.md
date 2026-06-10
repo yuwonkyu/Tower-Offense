@@ -82,6 +82,10 @@
 | 09 | [적 측 - 영웅](docs/design/09-enemy-heroes.md) | 기사/마법사/엘프궁수 |
 | 10 | [적 측 - 방어 유닛](docs/design/10-enemy-units.md) | 생성률/구성/스탯 |
 | 11 | [구조물](docs/design/11-structures.md) | 성벽/바리케이트/트랩 |
+| 12 | [신규 적 유닛](docs/design/12-new-enemy-units.md) | 마법사3등급/암살자/폭탄병/치유사/기마병 |
+| 13 | [스테이지 구성 패턴](docs/design/13-stage-patterns.md) | 1~30 유닛 조합 |
+| 14 | [유닛 우선타깃](docs/design/14-targeting-priority.md) | 유닛별 우선표적 |
+| 15 | [종족 시스템 비전](docs/design/15-races-vision.md) | 8종족 장기 로드맵 |
 | ✅ | [진행 현황](docs/design/PROGRESS.md) | 작업 상태 & 결정 로그 |
 
 ---
