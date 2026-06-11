@@ -15,8 +15,9 @@ export function unitDef(id: UnitId): UnitDef {
 }
 
 /**
- * 논리 좌표계: 가로 100 고정, 세로 = 100 × (화면 비율).
+ * 논리 좌표계: 가로 160 고정, 세로 = 160 × (화면 비율).
  * 유닛 사거리/이속(설계 02, 12)을 그대로 논리 단위로 사용.
+ * 가로 160 = 화면 약 40% 축소 부감 시점 (먼 거리에서 내려다보는 전장).
  */
 export interface FieldLayout {
   width: number;
@@ -30,15 +31,15 @@ export interface FieldLayout {
 }
 
 export function makeFieldLayout(aspectRatio: number): FieldLayout {
-  const width = 100;
+  const width = 160;
   const height = width * aspectRatio;
   return {
     width,
     height,
-    towerX: 50,
+    towerX: width / 2,
     towerY: height * 0.34,
     towerRadius: 11,
-    heroX: 50,
+    heroX: width / 2,
     heroY: height * 0.74,
     heroRadius: 3,
   };
