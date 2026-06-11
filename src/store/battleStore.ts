@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import type { GameSpeed } from '@/game/formulas';
 import { expToNextLevel } from '@/game/formulas';
-import type { StageConfig, StageDifficulty } from '@/game/types';
+import type { HeroDef, StageConfig, StageDifficulty } from '@/game/types';
+import type { BattleEngine } from '@/game/engine/engine';
 import { getStageConfig } from '@/data/stages';
 import { HEROES } from '@/data/heroes';
-import type { HeroDef } from '@/game/types';
 
 export type BattlePhase = 'ready' | 'running' | 'cardPick' | 'victory' | 'defeat';
 
@@ -25,11 +25,16 @@ interface BattleState {
   /** 스킬 남은 쿨타임 (초) */
   skillCooldown: number;
   kills: number;
+  /** 영웅 부활 카운트다운 (0 = 생존) */
+  reviveLeft: number;
   /** 선택한 카드 (cardId → 레벨) */
   pickedCards: Record<string, number>;
 
   startStage: (stage: number, difficulty?: StageDifficulty) => void;
+  /** 매 프레임: 타이머/쿨다운 진행 (dt = 실제 경과 초) */
   tick: (dt: number) => void;
+  /** 매 프레임: 엔진 상태를 HUD로 반영 */
+  syncFromEngine: (engine: BattleEngine) => void;
   cycleSpeed: () => void;
   useSkill: () => void;
   reset: () => void;
@@ -49,6 +54,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   expToNext: expToNextLevel(1),
   skillCooldown: 0,
   kills: 0,
+  reviveLeft: 0,
   pickedCards: {},
 
   startStage: (stage, difficulty = 'normal') => {
@@ -67,13 +73,14 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       expToNext: expToNextLevel(1),
       skillCooldown: 0,
       kills: 0,
+      reviveLeft: 0,
       pickedCards: {},
     });
   },
 
   tick: (dt) => {
     const s = get();
-    if (s.phase !== 'running' || !s.config) return;
+    if (s.phase !== 'running') return;
     const scaled = dt * s.speed;
 
     const timeLeft = Math.max(0, s.timeLeft - scaled);
@@ -84,6 +91,22 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       return;
     }
     set({ timeLeft, skillCooldown });
+  },
+
+  syncFromEngine: (engine) => {
+    const s = get();
+    if (s.phase !== 'running') return;
+    set({
+      towerHp: engine.towerHp,
+      heroHp: engine.hero.hp,
+      heroMaxHp: engine.hero.maxHp,
+      heroLevel: engine.level,
+      exp: engine.expInLevel,
+      expToNext: engine.expToNext,
+      kills: engine.kills,
+      reviveLeft: engine.reviveLeft,
+      ...(engine.result === 'victory' ? { phase: 'victory' as const } : null),
+    });
   },
 
   cycleSpeed: () => {
