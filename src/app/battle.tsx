@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BattleField } from '@/components/BattleField';
 import { Colors } from '@/constants/theme';
 import { ENEMY_HEROES } from '@/data/enemyHeroes';
 import { useBattleStore } from '@/store/battleStore';
@@ -57,10 +58,6 @@ export default function BattleScreen() {
   const skillReady = skillCooldown <= 0;
   const cardIds = Object.keys(pickedCards);
 
-  // 타워 외관 단계 (프로토타입: 색상 변화)
-  const towerColor =
-    towerPct > 0.6 ? Colors.enemyHpDim : towerPct > 0.3 ? 'rgba(230,140,60,0.5)' : 'rgba(255,80,80,0.7)';
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* ── 상단 바: 적 영웅 이름 / 적 HP / 설정 ── */}
@@ -93,15 +90,14 @@ export default function BattleScreen() {
           </Pressable>
         </View>
 
-        {/* 중앙: 적 타워 (원형) */}
-        <View style={styles.towerWrap}>
-          <View style={[styles.towerOuter, { borderColor: towerColor }]}>
-            <View style={[styles.towerInner, { borderColor: towerColor }]}>
-              <View style={styles.towerCore} />
-            </View>
-          </View>
-          <Text style={styles.towerLabel}>스테이지 {config.stage}</Text>
-        </View>
+        {/* 전투 캔버스: 타워 / 적 유닛 스폰·이동 / 영웅 */}
+        <BattleField
+          config={config}
+          speed={speed}
+          running={phase === 'running'}
+          towerPct={towerPct}
+        />
+        <Text style={styles.stageLabel}>스테이지 {config.stage}</Text>
 
         {/* 페이즈 오버레이 */}
         {(phase === 'victory' || phase === 'defeat') && (
@@ -242,32 +238,13 @@ const styles = StyleSheet.create({
   },
   speedText: { fontSize: 13, fontWeight: '600', color: Colors.speed },
 
-  towerWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  towerOuter: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 2,
-    backgroundColor: 'rgba(180,50,50,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  stageLabel: {
+    position: 'absolute',
+    bottom: 8,
+    left: 10,
+    fontSize: 11,
+    color: Colors.textDim,
   },
-  towerInner: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    borderWidth: 1.5,
-    backgroundColor: 'rgba(180,50,50,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  towerCore: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    backgroundColor: 'rgba(220,80,80,0.55)',
-  },
-  towerLabel: { marginTop: 8, fontSize: 11, color: Colors.textDim },
 
   overlay: {
     position: 'absolute',
