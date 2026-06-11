@@ -1,13 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BattleField } from '@/components/BattleField';
 import { Colors } from '@/constants/theme';
 import { ENEMY_HEROES } from '@/data/enemyHeroes';
+import type { BattleEngine } from '@/game/engine/engine';
 import { useBattleStore } from '@/store/battleStore';
 
-const TICK_MS = 100;
 const CARD_SLOTS = 8;
 
 function formatTime(seconds: number): string {
@@ -32,9 +32,10 @@ export default function BattleScreen() {
   const exp = useBattleStore((s) => s.exp);
   const expToNext = useBattleStore((s) => s.expToNext);
   const skillCooldown = useBattleStore((s) => s.skillCooldown);
+  const kills = useBattleStore((s) => s.kills);
+  const reviveLeft = useBattleStore((s) => s.reviveLeft);
   const pickedCards = useBattleStore((s) => s.pickedCards);
   const startStage = useBattleStore((s) => s.startStage);
-  const tick = useBattleStore((s) => s.tick);
   const cycleSpeed = useBattleStore((s) => s.cycleSpeed);
   const useSkill = useBattleStore((s) => s.useSkill);
   const reset = useBattleStore((s) => s.reset);
@@ -44,10 +45,12 @@ export default function BattleScreen() {
     return () => reset();
   }, [stageNum, startStage, reset]);
 
-  useEffect(() => {
-    const interval = setInterval(() => tick(TICK_MS / 1000), TICK_MS);
-    return () => clearInterval(interval);
-  }, [tick]);
+  // 게임 루프 (BattleField rAF)에서 매 프레임 호출
+  const handleFrame = useCallback((engine: BattleEngine, dt: number) => {
+    const store = useBattleStore.getState();
+    store.tick(dt);
+    store.syncFromEngine(engine);
+  }, []);
 
   if (!config) return <View style={styles.container} />;
 
@@ -90,14 +93,17 @@ export default function BattleScreen() {
           </Pressable>
         </View>
 
-        {/* 전투 캔버스: 타워 / 적 유닛 스폰·이동 / 영웅 */}
+        {/* 전투 캔버스: 타워 / 양측 유닛 자동 전투 / 영웅 */}
         <BattleField
           config={config}
           speed={speed}
           running={phase === 'running'}
           towerPct={towerPct}
+          onFrame={handleFrame}
         />
-        <Text style={styles.stageLabel}>스테이지 {config.stage}</Text>
+        <Text style={styles.stageLabel}>
+          스테이지 {config.stage} · 처치 {kills}
+        </Text>
 
         {/* 페이즈 오버레이 */}
         {(phase === 'victory' || phase === 'defeat') && (
@@ -115,9 +121,14 @@ export default function BattleScreen() {
       {/* ── 하단 패널 ── */}
       <View style={styles.bottomPanel}>
         <View style={styles.bottomRow}>
-          {/* 영웅 아이콘 */}
+          {/* 영웅 아이콘 (사망 시 부활 카운트다운 오버레이) */}
           <View style={styles.heroIcon}>
             <Text style={styles.heroIconText}>{hero.name[0]}</Text>
+            {reviveLeft > 0 && (
+              <View style={styles.reviveOverlay}>
+                <Text style={styles.reviveText}>{Math.ceil(reviveLeft)}</Text>
+              </View>
+            )}
           </View>
 
           {/* 중앙: Lv + 닉네임 + HP + 카드 */}
@@ -288,6 +299,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroIconText: { fontSize: 20, fontWeight: '700', color: Colors.heroText },
+  reviveOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviveText: { fontSize: 18, fontWeight: '700', color: Colors.enemyHp },
   heroInfo: { flex: 1, gap: 4 },
   heroInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heroNameWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
