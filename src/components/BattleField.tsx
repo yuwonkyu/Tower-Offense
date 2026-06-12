@@ -1,11 +1,17 @@
 import { Canvas, Circle } from '@shopify/react-native-skia';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import { BattleEngine, makeFieldLayout, type CombatEntity } from '@/game/engine/engine';
-import type { StageConfig, UnitId } from '@/game/types';
+import {
+  BattleEngine,
+  isStructure,
+  makeFieldLayout,
+  type CombatEntity,
+  type EntityKind,
+} from '@/game/engine/engine';
+import type { StageConfig } from '@/game/types';
 
-/** 프로토타입 유닛 표현: 원형 + 유닛별 색상 (설계 01) */
-const UNIT_VISUALS: Record<UnitId, { color: string; radius: number }> = {
+/** 프로토타입 엔티티 표현: 원형 + 종류별 색상 (설계 01) */
+const UNIT_VISUALS: Record<EntityKind, { color: string; radius: number }> = {
   shield: { color: '#c9a227', radius: 2.4 },
   archer: { color: '#6fb7e8', radius: 2.0 },
   spear: { color: '#7fb069', radius: 2.0 },
@@ -18,7 +24,18 @@ const UNIT_VISUALS: Record<UnitId, { color: string; radius: number }> = {
   bomber: { color: '#ff5544', radius: 2.2 },
   healer: { color: '#9fe1cb', radius: 2.0 },
   cavalry: { color: '#b08050', radius: 2.6 },
+  hero: { color: 'rgba(100,180,255,0.9)', radius: 3 },
+  // 구조물 (설계 11)
+  wall: { color: 'rgba(150,140,120,0.9)', radius: 3 },
+  barricade: { color: 'rgba(120,95,60,0.9)', radius: 2.2 },
+  trap: { color: 'rgba(200,60,60,0.65)', radius: 1.2 },
+  // 미니보스 / 30스테이지 팔라딘
+  knightMini: { color: '#e8c468', radius: 3.5 },
+  mageMini: { color: '#b06fe8', radius: 3.5 },
+  paladinBoss: { color: '#ffd700', radius: 4.2 },
 };
+
+const PROJECTILE_COLOR = 'rgba(220,210,180,0.95)';
 
 const ALLY_STROKE = 'rgba(120,200,255,0.9)';
 
@@ -88,9 +105,14 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
 
   const enemies: CombatEntity[] = [];
   const allies: CombatEntity[] = [];
+  const structures: CombatEntity[] = [];
   for (const e of engine.entities) {
     if (e.kind === 'hero') continue;
-    (e.side === 'enemy' ? enemies : allies).push(e);
+    if (isStructure(e.kind)) {
+      structures.push(e);
+    } else {
+      (e.side === 'enemy' ? enemies : allies).push(e);
+    }
   }
   const hero = engine.hero;
   const heroDead = hero.state === 'dead';
@@ -120,9 +142,23 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
           color="rgba(220,80,80,0.5)"
         />
 
+        {/* 구조물: 성벽/바리케이트/트랩 */}
+        {structures.map((e) => {
+          const v = UNIT_VISUALS[e.kind];
+          return (
+            <Circle
+              key={e.id}
+              cx={e.x * scale}
+              cy={e.y * scale}
+              r={v.radius * scale}
+              color={v.color}
+            />
+          );
+        })}
+
         {/* 적 유닛 */}
         {enemies.map((e) => {
-          const v = UNIT_VISUALS[e.kind as UnitId];
+          const v = UNIT_VISUALS[e.kind];
           return (
             <Circle
               key={e.id}
@@ -136,7 +172,7 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
 
         {/* 아군 유닛 (시안 테두리로 구분) */}
         {allies.map((e) => {
-          const v = UNIT_VISUALS[e.kind as UnitId];
+          const v = UNIT_VISUALS[e.kind];
           return (
             <Circle
               key={e.id}
@@ -148,7 +184,7 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
           );
         })}
         {allies.map((e) => {
-          const v = UNIT_VISUALS[e.kind as UnitId];
+          const v = UNIT_VISUALS[e.kind];
           return (
             <Circle
               key={`s${e.id}`}
@@ -161,6 +197,17 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
             />
           );
         })}
+
+        {/* 투사체 (투석기 돌덩이) */}
+        {engine.projectiles.map((p) => (
+          <Circle
+            key={`p${p.id}`}
+            cx={p.x * scale}
+            cy={p.y * scale}
+            r={1.1 * scale}
+            color={PROJECTILE_COLOR}
+          />
+        ))}
 
         {/* 아군 영웅 */}
         <Circle

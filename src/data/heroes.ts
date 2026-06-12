@@ -28,7 +28,8 @@ export const HEROES: HeroDef[] = [
     id: 'mir',
     name: '미르',
     concept: '궁사 (원거리)',
-    stats: { atk: 35, def: 15, hp: 120, moveSpeed: 6.5, range: 25, atkSpeed: 1.4, aoe: 1 },
+    // 원거리 사거리 ×0.6 재조정 (25→15)
+    stats: { atk: 35, def: 15, hp: 120, moveSpeed: 6.5, range: 15, atkSpeed: 1.4, aoe: 1 },
     growth: { atk: 2, def: 1, hp: 5, atkSpeed: 0.03 },
     skill: {
       name: '살소나기',

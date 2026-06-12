@@ -19,7 +19,7 @@ export const BASE_UNITS: UnitDef[] = [
     id: 'archer',
     name: '활병',
     concept: '원거리 딜러',
-    stats: { atk: 24, def: 5, hp: 40, moveSpeed: 5, range: 20, atkSpeed: 1.2, aoe: 1 },
+    stats: { atk: 24, def: 5, hp: 40, moveSpeed: 5, range: 12, atkSpeed: 1.2, aoe: 1 },
     priority: 'nearest',
     exp: 2,
     unlockStage: 0,
@@ -39,8 +39,10 @@ export const BASE_UNITS: UnitDef[] = [
     id: 'catapult',
     name: '투석기',
     concept: '광역 공성',
-    // 사거리 45 → 26: 가로 160 맵에서 45는 28%를 덮어 적 투석기 스테이지가 공략 불가 (시뮬 검증)
-    stats: { atk: 45, def: 35, hp: 90, moveSpeed: 1.5, range: 26, atkSpeed: 0.33, aoe: 5 },
+    // 원거리 사거리 ×0.6 재조정 (45→27) — 가로 160 맵 기준, 설계 02 원본은 가로 100 시절 수치
+    stats: { atk: 45, def: 35, hp: 90, moveSpeed: 1.5, range: 27, atkSpeed: 0.33, aoe: 5 },
+    // 투사체 지면 조준: 비행 중 이동한 타깃은 빗나감 (공성 무기 — 정지 목표에 강함)
+    projectileSpeed: 20,
     priority: 'tank',
     exp: 4,
     unlockStage: 0,

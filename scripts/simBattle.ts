@@ -41,11 +41,24 @@ while (elapsed < config.timeLimit && engine.result === 'ongoing') {
   engine.tick(DT);
   elapsed += DT;
   if (Math.abs(elapsed % 60) < DT) {
-    const allies = engine.entities.filter((e) => e.side === 'ally' && e.state !== 'dead').length;
-    const enemies = engine.entities.filter((e) => e.side === 'enemy' && e.state !== 'dead').length;
+    const alive = engine.entities.filter((e) => e.state !== 'dead');
+    const allies = alive.filter((e) => e.side === 'ally').length;
+    const structs = alive.filter((e) => ['wall', 'barricade', 'trap'].includes(e.kind)).length;
+    const walls = alive.filter((e) => e.kind === 'wall').length;
+    const enemies = alive.filter((e) => e.side === 'enemy').length - structs;
+    // 전선: 아군 유닛 최전방 (타워까지 남은 거리)
+    const allyUnits = alive.filter((e) => e.side === 'ally' && e.kind !== 'hero');
+    const front = allyUnits.length
+      ? Math.round(
+          Math.min(
+            ...allyUnits.map((e) => Math.hypot(e.x - engine.field.towerX, e.y - engine.field.towerY)),
+          ),
+        )
+      : -1;
     console.log(
       `[${Math.round(elapsed / 60)}분] 타워 ${Math.ceil(engine.towerHp).toLocaleString()} | ` +
-        `Lv.${engine.level} | 처치 ${engine.kills} | 아군 ${allies} vs 적 ${enemies} | ` +
+        `Lv.${engine.level} | 처치 ${engine.kills} | 아군 ${allies} vs 적 ${enemies} | 성벽 ${walls} | ` +
+        `전선↔타워 ${front < 0 ? '-' : front} | ` +
         `영웅HP ${Math.ceil(engine.hero.hp)}/${Math.round(engine.hero.maxHp)}${engine.hero.state === 'dead' ? ' (사망)' : ''}`,
     );
   }
