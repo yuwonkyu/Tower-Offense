@@ -13,7 +13,60 @@ const DT = 1 / 30;
 let elapsed = 0;
 const pickLog = new Map<string, number>();
 
-/** 카드 선택권 자동 소비 — 플레이어 근사: 유닛 2종 확보 전엔 딜러 유닛 우선, 이후 랜덤 */
+/**
+ * 카드 선택권 자동 소비 — "괜찮은 플레이어" 근사 모델.
+ * 유닛 3종까지 딜러 우선 확보 → 이후 공격/경험치/생성 계열 가중 선택.
+ * (완전 랜덤은 근접 유닛만 뽑는 등 실패 런 변동이 너무 큼 — 밸런스 신호가 묻힘)
+ */
+const PICK_WEIGHT: Record<string, number> = {
+  // 핵심 성장
+  g_exp: 10,
+  g_spawnspeed: 9,
+  g_atk: 8,
+  g_atkspeed: 8,
+  // 유닛 딜 특성
+  spear_atk: 7,
+  sword_atk: 7,
+  catapult_atk: 7,
+  archer_atkspeed: 7,
+  archer_crit: 6,
+  spear_extra: 6,
+  archer_firearrow: 6,
+  catapult_stun: 6,
+  g_crit: 6,
+  g_range: 5,
+  archer_range: 5,
+  catapult_range: 5,
+  catapult_aoe: 5,
+  spear_charge: 5,
+  archer_pierce: 5,
+  g_cdr: 4,
+  g_hero: 4,
+  spear_bleed: 4,
+  catapult_fire: 4,
+  // 생존 계열
+  g_hp: 3,
+  g_def: 3,
+  shield_hp: 3,
+  shield_def: 3,
+  sword_lifesteal: 3,
+  g_lifesteal: 3,
+  g_undying: 3,
+  g_revive: 3,
+  shield_taunt: 3,
+  spear_reduce: 3,
+  // 저가치
+  g_movespeed: 1,
+  g_evade: 2,
+  g_frenzy: 2,
+  sword_evade: 2,
+  sword_hp: 2,
+  shield_speed: 1,
+  shield_regen: 2,
+  sword_berserker: 1,
+  g_gold: 1,
+};
+
 function autoPick() {
   while (engine.pendingPicks > 0) {
     const choices = engine.cards.rollChoices(3);
@@ -21,12 +74,21 @@ function autoPick() {
       engine.pendingPicks = 0;
       break;
     }
-    let card = choices[Math.floor(Math.random() * choices.length)];
-    if (engine.cards.ownedUnits.length < 2) {
-      const units = choices.filter((c) => c.kind === 'unit' && c.unitId);
-      if (units.length > 0) {
-        units.sort((a, b) => unitDef(b.unitId!).stats.atk - unitDef(a.unitId!).stats.atk);
-        card = units[0];
+    let card = choices[0];
+    const units = choices.filter((c) => c.kind === 'unit' && c.unitId);
+    if (engine.cards.ownedUnits.length < 3 && units.length > 0) {
+      // 유닛 3종까지 우선 확보 — 딜러(공격력 높은 순)부터
+      units.sort((a, b) => unitDef(b.unitId!).stats.atk - unitDef(a.unitId!).stats.atk);
+      card = units[0];
+    } else {
+      // 가중치 최고 카드 선택 (동점이면 앞쪽)
+      let bestW = -1;
+      for (const c of choices) {
+        const w = c.kind === 'unit' ? 4 : (PICK_WEIGHT[c.id] ?? 3);
+        if (w > bestW) {
+          bestW = w;
+          card = c;
+        }
       }
     }
     engine.pickCard(card.id);
@@ -38,6 +100,7 @@ console.log(`── 스테이지 ${stage} 시뮬레이션 (타워 ${config.tower
 
 while (elapsed < config.timeLimit && engine.result === 'ongoing') {
   autoPick();
+  engine.useHeroSkill(); // 준비되면 즉시 사용 (쿨다운/타깃 없음 시 무시)
   engine.tick(DT);
   elapsed += DT;
   if (Math.abs(elapsed % 60) < DT) {

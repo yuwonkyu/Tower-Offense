@@ -25,6 +25,31 @@ export interface UnitMods {
   lifestealPct: number;
   regenPctPerSec: number;
   frenzyAtkPct: number;
+  // ── 프록 효과 (설계 04, 05) ──
+  /** 도발 확률 % — 공격 시 주변 적 타깃을 자신으로 전환 */
+  tauntChance: number;
+  /** 관통 확률 % — 1마리 추가 타격 */
+  pierceChance: number;
+  /** 추가피해 발동 확률 % (추가타/불화살) */
+  bonusChance: number;
+  /** 추가피해량 — 공격력 대비 % 고정 (방어 미적용) */
+  bonusDmgPct: number;
+  /** 출혈 발동 확률 % */
+  bleedChance: number;
+  /** 출혈 초당 피해 — 대상 최대체력 % (3초, 타워/구조물 제외) */
+  bleedDotPct: number;
+  /** 받는 피해 감소 % */
+  dmgReductionPct: number;
+  /** 돌진 — 이동 후 첫 타 추가피해 % + 접근 이속 보너스 */
+  chargeDmgPct: number;
+  /** 화상 발동 확률 % */
+  burnChance: number;
+  /** 화상 초당 피해 — 대상 최대체력 % (3초, 타워/구조물 제외) */
+  burnPct: number;
+  /** 타격 시 기절 (초) */
+  stunSec: number;
+  /** 불굴 — 치명적 피해 시 HP 1 생존 쿨타임 (0 = 미보유) */
+  undyingCooldownSec: number;
 }
 
 const MOD_KEYS: (keyof UnitMods)[] = [
@@ -40,6 +65,11 @@ const MOD_KEYS: (keyof UnitMods)[] = [
   'lifestealPct',
   'regenPctPerSec',
   'frenzyAtkPct',
+  'tauntChance',
+  'pierceChance',
+  'dmgReductionPct',
+  'chargeDmgPct',
+  'stunSec',
 ];
 
 export function zeroMods(): UnitMods {
@@ -56,6 +86,18 @@ export function zeroMods(): UnitMods {
     lifestealPct: 0,
     regenPctPerSec: 0,
     frenzyAtkPct: 0,
+    tauntChance: 0,
+    pierceChance: 0,
+    bonusChance: 0,
+    bonusDmgPct: 0,
+    bleedChance: 0,
+    bleedDotPct: 0,
+    dmgReductionPct: 0,
+    chargeDmgPct: 0,
+    burnChance: 0,
+    burnPct: 0,
+    stunSec: 0,
+    undyingCooldownSec: 0,
   };
 }
 
@@ -63,8 +105,29 @@ function addEffects(acc: UnitMods, effect: Record<string, number>) {
   for (const key of MOD_KEYS) {
     if (effect[key] !== undefined) acc[key] += effect[key];
   }
-  // TODO: 프록 효과 (tauntChance / pierceChance / chance·bonusDmgPct / dotPct /
-  //  dmgReductionPct / chargeDmgPct / burnPct / stunSec / cooldownSec)는 프록 시스템 단계에서 구현
+  // chance 페어형 프록: 같이 실린 보조 키로 종류 판별
+  if (effect.chance !== undefined) {
+    if (effect.bonusDmgPct !== undefined) {
+      // 추가타(창병 50%) / 불화살(활병 130%) — 발동 확률 합산, 피해량은 최대값
+      acc.bonusChance += effect.chance;
+      acc.bonusDmgPct = Math.max(acc.bonusDmgPct, effect.bonusDmgPct);
+    }
+    if (effect.dotPct !== undefined) {
+      acc.bleedChance += effect.chance;
+      acc.bleedDotPct += effect.dotPct;
+    }
+    if (effect.burnPct !== undefined) {
+      acc.burnChance += effect.chance;
+      acc.burnPct += effect.burnPct;
+    }
+  }
+  // 불굴: 쿨타임은 낮을수록 강함 — 최소값 채택
+  if (effect.cooldownSec !== undefined) {
+    acc.undyingCooldownSec =
+      acc.undyingCooldownSec === 0
+        ? effect.cooldownSec
+        : Math.min(acc.undyingCooldownSec, effect.cooldownSec);
+  }
 }
 
 export class CardSystem {

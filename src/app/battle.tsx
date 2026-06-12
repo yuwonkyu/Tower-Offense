@@ -13,6 +13,7 @@ import type { BattleEngine } from '@/game/engine/engine';
 import { CARD_PICK_SECONDS, heroMetaExpForStage } from '@/game/formulas';
 import { useBattleStore } from '@/store/battleStore';
 import { useProgressStore } from '@/store/progressStore';
+import { useMonetizationStore } from '@/store/monetizationStore';
 import { TOTAL_STAGES } from '@/data/stages';
 
 const CARD_SLOTS = 8;
@@ -58,8 +59,16 @@ export default function BattleScreen() {
   const onStageClear = useProgressStore((s) => s.onStageClear);
   const onStageDefeat = useProgressStore((s) => s.onStageDefeat);
 
+  const adFree = useMonetizationStore((s) => s.adFree);
+
   /** 진행 중인 광고 보상 종류 (null = 광고 없음) */
-  const [adKind, setAdKind] = useState<'doubleReward' | 'cardReroll' | 'speedX4' | null>(null);
+  const [adKind, setAdKind] = useState<
+    'doubleReward' | 'cardReroll' | 'speedX4' | 'retry' | null
+  >(null);
+
+  const retryStage = () => {
+    router.replace({ pathname: '/battle', params: { stage: stageNum } });
+  };
 
   const handleAdReward = () => {
     const store = useBattleStore.getState();
@@ -70,6 +79,10 @@ export default function BattleScreen() {
     } else if (adKind === 'doubleReward') {
       const delta = store.applyDoubleReward();
       if (delta > 0) useProgressStore.getState().addGold(delta);
+    } else if (adKind === 'retry') {
+      setAdKind(null);
+      retryStage();
+      return;
     }
     setAdKind(null);
   };
@@ -275,11 +288,17 @@ export default function BattleScreen() {
             router.replace({ pathname: '/battle', params: { stage: next } });
           }}
           onRetry={() => {
-            router.replace({ pathname: '/battle', params: { stage: stageNum } });
+            // 실패 재도전 = 광고 (설계 06 IAA) — 광고 제거 구매자/승리 후 재시도는 무료
+            if (phase === 'defeat' && !adFree) {
+              setAdKind('retry');
+            } else {
+              retryStage();
+            }
           }}
           onExit={() => router.back()}
           onDoubleReward={() => setAdKind('doubleReward')}
           rewardDoubled={rewardDoubled}
+          retryNeedsAd={phase === 'defeat' && !adFree}
         />
       )}
 
