@@ -5,17 +5,21 @@ import { Colors } from '@/constants/theme';
 import { TOTAL_STAGES } from '@/data/stages';
 import { enemyHeroForStage } from '@/data/enemyHeroes';
 import { TOWER_TABLE } from '@/data/towers';
+import { useProgressStore } from '@/store/progressStore';
 
 const STAGES = Array.from({ length: TOTAL_STAGES }, (_, i) => i + 1);
 
 export default function HomeScreen() {
-  // TODO: 진행도 저장 연동 (현재는 전체 개방)
-  const clearedStage = TOTAL_STAGES;
+  const clearedStage = useProgressStore((s) => s.clearedStage);
+  const gold = useProgressStore((s) => s.gold);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.title}>Tower Offense</Text>
-      <Text style={styles.subtitle}>인간 종족 — 일반 모드</Text>
+      <View style={styles.topRow}>
+        <Text style={styles.subtitle}>인간 종족 — 일반 모드</Text>
+        <Text style={styles.goldChip}>◈ {gold.toLocaleString()}</Text>
+      </View>
       <FlatList
         data={STAGES}
         keyExtractor={(n) => String(n)}
@@ -55,12 +59,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 12,
+  },
   subtitle: {
     fontSize: 13,
     color: Colors.textSub,
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 12,
+  },
+  goldChip: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.gold,
   },
   grid: { paddingHorizontal: 12, paddingBottom: 24 },
   cell: {

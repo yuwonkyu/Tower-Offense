@@ -27,10 +27,23 @@ interface Props {
   /** 현재 영웅 레벨 */
   level: number;
   onPick: (cardId: string) => void;
+  /** 리롤 버튼 (광고) — undefined면 숨김 */
+  onReroll?: () => void;
+  /** 이번 픽에서 리롤 사용 완료 */
+  rerollUsed?: boolean;
 }
 
 /** TFT 스타일 카드 선택 오버레이 — 미선택 시 랜덤 (설계 07) */
-export function CardPickModal({ choices, ownedLevels, timeLeft, totalTime, level, onPick }: Props) {
+export function CardPickModal({
+  choices,
+  ownedLevels,
+  timeLeft,
+  totalTime,
+  level,
+  onPick,
+  onReroll,
+  rerollUsed,
+}: Props) {
   const timerPct = totalTime > 0 ? Math.max(0, timeLeft / totalTime) : 0;
 
   return (
@@ -92,6 +105,19 @@ export function CardPickModal({ choices, ownedLevels, timeLeft, totalTime, level
           );
         })}
       </View>
+
+      {/* 카드 재선택 (광고 보상 — 설계 06 IAA, 픽당 1회) */}
+      {onReroll && (
+        <Pressable
+          style={[styles.rerollBtn, rerollUsed && styles.rerollBtnUsed]}
+          onPress={onReroll}
+          disabled={rerollUsed}
+        >
+          <Text style={styles.rerollText}>
+            {rerollUsed ? '재선택 사용됨' : '📺 광고 보고 재선택'}
+          </Text>
+        </Pressable>
+      )}
 
       {/* 선택 타이머 — 만료 시 랜덤 선택 */}
       <View style={styles.timerBar}>
@@ -157,6 +183,18 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(180,230,255,0.9)',
   },
   levelText: { fontSize: 10, color: Colors.textSub, marginLeft: 4 },
+
+  rerollBtn: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(93,173,226,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(93,173,226,0.4)',
+  },
+  rerollBtnUsed: { opacity: 0.35 },
+  rerollText: { fontSize: 12, fontWeight: '600', color: Colors.diamond },
 
   timerBar: {
     alignSelf: 'stretch',

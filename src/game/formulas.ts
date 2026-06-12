@@ -119,3 +119,41 @@ export const CARD_RARITY_WEIGHT = {
 /** 배속 옵션: x1/x2 무료, x4 유료 또는 광고 */
 export const SPEED_OPTIONS = [1, 2, 4] as const;
 export type GameSpeed = (typeof SPEED_OPTIONS)[number];
+
+// ── 영웅 메타 레벨 (전투 외 성장) ──────────────────────────────
+/** 메타 레벨 L → L+1 필요 EXP = L × 100 */
+export function heroMetaExpToNext(level: number): number {
+  return level * 100;
+}
+
+/** 누적 EXP → { level, expInLevel, expToNext } */
+export function heroMetaLevelFromExp(totalExp: number): {
+  level: number;
+  expInLevel: number;
+  expToNext: number;
+} {
+  let level = 1;
+  let remaining = totalExp;
+  while (remaining >= heroMetaExpToNext(level)) {
+    remaining -= heroMetaExpToNext(level);
+    level++;
+  }
+  return { level, expInLevel: remaining, expToNext: heroMetaExpToNext(level) };
+}
+
+/** 스테이지 종료 시 영웅 메타 EXP: 클리어 stage×20, 패배 stage×5 */
+export function heroMetaExpForStage(stage: number, victory: boolean): number {
+  return victory ? stage * 20 : Math.floor(stage * 5);
+}
+
+/** 영웅 스탯 초기화 비용 (다이아) */
+export const HERO_RESET_DIAMONDS = 50;
+
+/** 유닛 가챠 1회 비용 (다이아) — 10장 지급 */
+export const UNIT_GACHA_COST = 50;
+/** 영웅 가챠 1회 비용 (다이아) — 영웅 1회 소환 */
+export const HERO_GACHA_COST = 100;
+/** 중복 영웅 소환 시 지급 EXP */
+export const HERO_DUPE_EXP = 100;
+/** 유닛 가챠 1회 지급 카드 수 */
+export const UNIT_GACHA_CARDS = 10;

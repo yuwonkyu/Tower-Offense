@@ -1,15 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AdStubModal } from '@/components/AdStubModal';
 import { BattleField } from '@/components/BattleField';
 import { CardPickModal } from '@/components/CardPickModal';
+import { StageResultModal } from '@/components/StageResultModal';
 import { Colors } from '@/constants/theme';
 import { cardById } from '@/data/cards';
 import { ENEMY_HEROES } from '@/data/enemyHeroes';
 import type { BattleEngine } from '@/game/engine/engine';
-import { CARD_PICK_SECONDS } from '@/game/formulas';
+import { CARD_PICK_SECONDS, heroMetaExpForStage } from '@/game/formulas';
 import { useBattleStore } from '@/store/battleStore';
+import { useProgressStore } from '@/store/progressStore';
+import { TOTAL_STAGES } from '@/data/stages';
 
 const CARD_SLOTS = 8;
 
@@ -36,15 +40,66 @@ export default function BattleScreen() {
   const expToNext = useBattleStore((s) => s.expToNext);
   const skillCooldown = useBattleStore((s) => s.skillCooldown);
   const kills = useBattleStore((s) => s.kills);
+  const deaths = useBattleStore((s) => s.deaths);
+  const clearTime = useBattleStore((s) => s.clearTime);
+  const goldEarned = useBattleStore((s) => s.goldEarned);
   const reviveLeft = useBattleStore((s) => s.reviveLeft);
   const pickedCards = useBattleStore((s) => s.pickedCards);
   const pickChoices = useBattleStore((s) => s.pickChoices);
   const pickTimeLeft = useBattleStore((s) => s.pickTimeLeft);
+  const rerollUsed = useBattleStore((s) => s.rerollUsed);
+  const rewardDoubled = useBattleStore((s) => s.rewardDoubled);
   const startStage = useBattleStore((s) => s.startStage);
   const pickCard = useBattleStore((s) => s.pickCard);
   const cycleSpeed = useBattleStore((s) => s.cycleSpeed);
   const useSkill = useBattleStore((s) => s.useSkill);
   const reset = useBattleStore((s) => s.reset);
+
+  const onStageClear = useProgressStore((s) => s.onStageClear);
+  const onStageDefeat = useProgressStore((s) => s.onStageDefeat);
+
+  /** 진행 중인 광고 보상 종류 (null = 광고 없음) */
+  const [adKind, setAdKind] = useState<'doubleReward' | 'cardReroll' | 'speedX4' | null>(null);
+
+  const handleAdReward = () => {
+    const store = useBattleStore.getState();
+    if (adKind === 'speedX4') {
+      store.unlockX4();
+    } else if (adKind === 'cardReroll') {
+      store.rerollCards();
+    } else if (adKind === 'doubleReward') {
+      const delta = store.applyDoubleReward();
+      if (delta > 0) useProgressStore.getState().addGold(delta);
+    }
+    setAdKind(null);
+  };
+
+  const handleSpeedPress = () => {
+    if (cycleSpeed() === 'needsX4Ad') setAdKind('speedX4');
+  };
+
+  // 결과 확정 시 진행도 저장 (1회만)
+  const engine = useBattleStore((s) => s.engine);
+  useEffect(() => {
+    const heroId = 'maruhan'; // HEROES[0] — 추후 선택 영웅 ID로 교체
+    if (phase === 'victory') {
+      onStageClear({
+        stage: stageNum,
+        goldEarned,
+        unlocksUnit: config?.unlocksUnit,
+        heroId,
+        heroExpGained: heroMetaExpForStage(stageNum, true),
+      });
+    } else if (phase === 'defeat') {
+      onStageDefeat({
+        goldEarned,
+        heroId,
+        heroExpGained: heroMetaExpForStage(stageNum, false),
+      });
+    }
+    // phase가 결과로 전환될 때만 1회 실행
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   useEffect(() => {
     startStage(stageNum);
@@ -94,7 +149,7 @@ export default function BattleScreen() {
           <View style={styles.timerChip}>
             <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
           </View>
-          <Pressable style={styles.speedChip} onPress={cycleSpeed}>
+          <Pressable style={styles.speedChip} onPress={handleSpeedPress}>
             <Text style={styles.speedText}>x{speed}</Text>
           </Pressable>
         </View>
@@ -111,17 +166,7 @@ export default function BattleScreen() {
           스테이지 {config.stage} · 처치 {kills}
         </Text>
 
-        {/* 페이즈 오버레이 */}
-        {(phase === 'victory' || phase === 'defeat') && (
-          <View style={styles.overlay}>
-            <Text style={[styles.overlayText, phase === 'victory' ? styles.win : styles.lose]}>
-              {phase === 'victory' ? 'VICTORY' : 'DEFEAT'}
-            </Text>
-            <Pressable style={styles.exitBtn} onPress={() => router.back()}>
-              <Text style={styles.exitText}>나가기</Text>
-            </Pressable>
-          </View>
-        )}
+        {/* 페이즈 오버레이 — 정산 모달로 대체 */}
       </View>
 
       {/* ── 하단 패널 ── */}
@@ -207,8 +252,43 @@ export default function BattleScreen() {
           totalTime={CARD_PICK_SECONDS}
           level={heroLevel}
           onPick={pickCard}
+          onReroll={() => setAdKind('cardReroll')}
+          rerollUsed={rerollUsed}
         />
       )}
+
+      {/* ── 스테이지 정산 ── */}
+      {(phase === 'victory' || phase === 'defeat') && (
+        <StageResultModal
+          result={{
+            victory: phase === 'victory',
+            stage: stageNum,
+            kills,
+            deaths,
+            totalExp: engine?.totalExp ?? 0,
+            goldEarned,
+            clearTime,
+            finalLevel: heroLevel,
+          }}
+          onNextStage={() => {
+            const next = Math.min(stageNum + 1, TOTAL_STAGES);
+            router.replace({ pathname: '/battle', params: { stage: next } });
+          }}
+          onRetry={() => {
+            router.replace({ pathname: '/battle', params: { stage: stageNum } });
+          }}
+          onExit={() => router.back()}
+          onDoubleReward={() => setAdKind('doubleReward')}
+          rewardDoubled={rewardDoubled}
+        />
+      )}
+
+      {/* ── 광고 스텁 (설계 06 IAA — x4 / 카드 재선택 / 보상 2배) ── */}
+      <AdStubModal
+        visible={adKind !== null}
+        onReward={handleAdReward}
+        onClose={() => setAdKind(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -281,31 +361,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textDim,
   },
-
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    zIndex: 3,
-  },
-  overlayText: { fontSize: 36, fontWeight: '800' },
-  win: { color: Colors.gold },
-  lose: { color: Colors.enemyHp },
-  exitBtn: {
-    paddingHorizontal: 32,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  exitText: { fontSize: 15, color: Colors.textMain },
 
   bottomPanel: {
     backgroundColor: Colors.panel,

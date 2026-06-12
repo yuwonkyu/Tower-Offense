@@ -1,34 +1,121 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { HEROES } from '@/data/heroes';
+import { HERO_RESET_DIAMONDS } from '@/game/formulas';
+import { useProgressStore, type HeroStatAlloc } from '@/store/progressStore';
+
+const STAT_LABELS: { key: keyof HeroStatAlloc; label: string; unit: string }[] = [
+  { key: 'atk', label: '공격력', unit: 'ATK' },
+  { key: 'def', label: '방어력', unit: 'DEF' },
+  { key: 'hp', label: '체력', unit: 'HP' },
+  { key: 'atkSpeed', label: '공격속도', unit: 'ASPD' },
+];
 
 export default function HeroesScreen() {
+  const getHeroMeta = useProgressStore((s) => s.getHeroMeta);
+  const investHeroStat = useProgressStore((s) => s.investHeroStat);
+  const upgradeHeroSkill = useProgressStore((s) => s.upgradeHeroSkill);
+  const resetHeroStats = useProgressStore((s) => s.resetHeroStats);
+  const diamonds = useProgressStore((s) => s.diamonds);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.title}>영웅</Text>
       <ScrollView contentContainerStyle={styles.list}>
-        {HEROES.map((hero) => (
-          <View key={hero.id} style={styles.card}>
-            <View style={styles.portrait}>
-              <Text style={styles.portraitText}>{hero.name[0]}</Text>
+        {HEROES.map((hero) => {
+          const meta = getHeroMeta(hero.id);
+          const expPct = meta.expToNext > 0 ? meta.expInLevel / meta.expToNext : 0;
+
+          return (
+            <View key={hero.id} style={styles.card}>
+              {/* 초상화 + 레벨 */}
+              <View style={styles.topRow}>
+                <View style={styles.portrait}>
+                  <Text style={styles.portraitText}>{hero.name[0]}</Text>
+                </View>
+                <View style={styles.heroInfo}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.heroName}>{hero.name}</Text>
+                    <View style={styles.lvBadge}>
+                      <Text style={styles.lvText}>Lv.{meta.level}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.concept}>{hero.concept}</Text>
+                  {/* EXP 바 */}
+                  <View style={styles.expBarBg}>
+                    <View style={[styles.expBarFill, { width: `${expPct * 100}%` }]} />
+                  </View>
+                  <Text style={styles.expText}>
+                    {meta.expInLevel.toLocaleString()} / {meta.expToNext.toLocaleString()} EXP
+                  </Text>
+                </View>
+              </View>
+
+              {/* 스탯 포인트 */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>스탯 포인트</Text>
+                <Text style={[styles.ptsLeft, meta.statPtsAvailable > 0 && styles.ptsAvail]}>
+                  {meta.statPtsAvailable}pt 남음
+                </Text>
+              </View>
+              {STAT_LABELS.map(({ key, label, unit }) => (
+                <View key={key} style={styles.statRow}>
+                  <Text style={styles.statLabel}>{label}</Text>
+                  <Text style={styles.statBase}>
+                    {hero.stats[key as keyof typeof hero.stats]}
+                    {meta.invested[key] > 0 && (
+                      <Text style={styles.statBonus}> +{meta.invested[key]}%</Text>
+                    )}
+                  </Text>
+                  <View style={styles.statBadge}>
+                    <Text style={styles.statBadgeText}>{unit} {meta.invested[key]}</Text>
+                  </View>
+                  <Pressable
+                    style={[styles.plusBtn, meta.statPtsAvailable <= 0 && styles.plusBtnDisabled]}
+                    onPress={() => investHeroStat(hero.id, key)}
+                    disabled={meta.statPtsAvailable <= 0}
+                  >
+                    <Text style={styles.plusBtnText}>+</Text>
+                  </Pressable>
+                </View>
+              ))}
+
+              {/* 스킬 레벨 */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>스킬</Text>
+                <Text style={[styles.ptsLeft, meta.skillPtsAvailable > 0 && styles.ptsAvail]}>
+                  {meta.skillPtsAvailable}pt 남음
+                </Text>
+              </View>
+              <View style={styles.skillRow}>
+                <View style={styles.skillInfo}>
+                  <Text style={styles.skillName}>{hero.skill.name}</Text>
+                  <Text style={styles.skillDesc}>{hero.skill.description}</Text>
+                  <Text style={styles.skillLv}>Lv.{meta.skillLevel} — 계수 {(hero.skill.ratio * (1 + (meta.skillLevel - 1) * 0.02) * 100).toFixed(0)}%</Text>
+                </View>
+                <Pressable
+                  style={[styles.skillBtn, meta.skillPtsAvailable <= 0 && styles.plusBtnDisabled]}
+                  onPress={() => upgradeHeroSkill(hero.id)}
+                  disabled={meta.skillPtsAvailable <= 0}
+                >
+                  <Text style={styles.skillBtnText}>강화</Text>
+                </Pressable>
+              </View>
+
+              {/* 초기화 */}
+              <Pressable
+                style={[styles.resetBtn, diamonds < HERO_RESET_DIAMONDS && styles.resetBtnDisabled]}
+                onPress={() => resetHeroStats(hero.id)}
+                disabled={diamonds < HERO_RESET_DIAMONDS}
+              >
+                <Text style={styles.resetBtnText}>
+                  초기화 ({HERO_RESET_DIAMONDS} 💎)
+                </Text>
+              </Pressable>
             </View>
-            <View style={styles.info}>
-              <Text style={styles.name}>{hero.name}</Text>
-              <Text style={styles.concept}>{hero.concept}</Text>
-              <Text style={styles.stats}>
-                공 {hero.stats.atk} · 방 {hero.stats.def} · HP {hero.stats.hp} · 공속{' '}
-                {hero.stats.atkSpeed}
-              </Text>
-              <Text style={styles.skill}>
-                {hero.skill.name} — {hero.skill.description}
-              </Text>
-            </View>
-          </View>
-        ))}
-        <Text style={styles.note}>
-          영웅별 독립 레벨 · 스탯 포인트(1pt = +1%) · 5레벨마다 스킬 포인트 · 초기화 = 다이아
-        </Text>
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -43,16 +130,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 12,
   },
-  list: { paddingHorizontal: 16, paddingBottom: 24, gap: 12 },
+  list: { paddingHorizontal: 14, paddingBottom: 32, gap: 14 },
+
   card: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    padding: 12,
-    gap: 12,
+    padding: 14,
+    gap: 10,
   },
+
+  topRow: { flexDirection: 'row', gap: 12 },
   portrait: {
     width: 56,
     height: 64,
@@ -64,16 +153,89 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   portraitText: { fontSize: 22, color: Colors.heroText, fontWeight: '700' },
-  info: { flex: 1, gap: 3 },
-  name: { fontSize: 16, fontWeight: '600', color: Colors.textMain },
-  concept: { fontSize: 12, color: Colors.textSub },
-  stats: { fontSize: 11, color: Colors.textSub },
-  skill: { fontSize: 11, color: Colors.gold },
-  note: {
-    fontSize: 11,
-    color: Colors.textDim,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 16,
+  heroInfo: { flex: 1, gap: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroName: { fontSize: 16, fontWeight: '700', color: Colors.textMain },
+  lvBadge: {
+    backgroundColor: 'rgba(160,100,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(160,100,255,0.45)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
   },
+  lvText: { fontSize: 11, fontWeight: '700', color: 'rgba(190,150,255,0.9)' },
+  concept: { fontSize: 11, color: Colors.textSub },
+  expBarBg: {
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  expBarFill: { height: '100%', backgroundColor: Colors.exp, borderRadius: 3 },
+  expText: { fontSize: 10, color: Colors.textDim },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.07)',
+    paddingTop: 8,
+  },
+  sectionLabel: { fontSize: 12, color: Colors.gold, fontWeight: '600' },
+  ptsLeft: { fontSize: 11, color: Colors.textDim },
+  ptsAvail: { color: 'rgba(100,220,120,0.9)', fontWeight: '600' },
+
+  statRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statLabel: { flex: 1, fontSize: 13, color: Colors.textSub },
+  statBase: { fontSize: 13, color: Colors.textMain },
+  statBonus: { color: 'rgba(100,220,120,0.9)' },
+  statBadge: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  statBadgeText: { fontSize: 10, color: Colors.textSub },
+  plusBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(100,200,100,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(100,200,100,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusBtnDisabled: { opacity: 0.3 },
+  plusBtnText: { fontSize: 16, color: 'rgba(120,220,120,0.9)', lineHeight: 20 },
+
+  skillRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  skillInfo: { flex: 1, gap: 2 },
+  skillName: { fontSize: 13, fontWeight: '600', color: Colors.gold },
+  skillDesc: { fontSize: 11, color: Colors.textSub },
+  skillLv: { fontSize: 11, color: 'rgba(160,130,255,0.85)' },
+  skillBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(160,100,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(160,100,255,0.45)',
+    alignSelf: 'center',
+  },
+  skillBtnText: { fontSize: 12, color: 'rgba(200,170,255,0.9)', fontWeight: '600' },
+
+  resetBtn: {
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(231,76,60,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(231,76,60,0.3)',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  resetBtnDisabled: { opacity: 0.35 },
+  resetBtnText: { fontSize: 12, color: 'rgba(231,100,80,0.9)' },
 });
