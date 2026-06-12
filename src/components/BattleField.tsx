@@ -57,10 +57,13 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const engine = engineRef.current;
-      if (running && engine) {
-        engine.tick(dt * speed);
+      if (engine) {
+        // 카드 선택 등 일시정지 중에도 onFrame은 호출 (선택 타이머 진행)
+        if (running) {
+          engine.tick(dt * speed);
+          setFrame((f) => f + 1);
+        }
         onFrameRef.current?.(engine, dt);
-        setFrame((f) => f + 1);
       }
       raf = requestAnimationFrame(loop);
     };

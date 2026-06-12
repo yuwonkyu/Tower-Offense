@@ -39,7 +39,8 @@ export const BASE_UNITS: UnitDef[] = [
     id: 'catapult',
     name: '투석기',
     concept: '광역 공성',
-    stats: { atk: 45, def: 35, hp: 90, moveSpeed: 1.5, range: 45, atkSpeed: 0.33, aoe: 5 },
+    // 사거리 45 → 26: 가로 160 맵에서 45는 28%를 덮어 적 투석기 스테이지가 공략 불가 (시뮬 검증)
+    stats: { atk: 45, def: 35, hp: 90, moveSpeed: 1.5, range: 26, atkSpeed: 0.33, aoe: 5 },
     priority: 'tank',
     exp: 4,
     unlockStage: 0,
