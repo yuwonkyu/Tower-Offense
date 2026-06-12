@@ -64,8 +64,11 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
 
   useEffect(() => {
     if (!size) return;
-    const unitMetaBonuses = useProgressStore.getState().getUnitMetaBonuses();
-    engineRef.current = new BattleEngine(config, makeFieldLayout(size.h / size.w), undefined, unitMetaBonuses);
+    const progress = useProgressStore.getState();
+    const unitMetaBonuses = progress.getUnitMetaBonuses();
+    const engine = new BattleEngine(config, makeFieldLayout(size.h / size.w), undefined, unitMetaBonuses);
+    engine.heroSkillLevel = progress.getHeroMeta('maruhan').skillLevel; // HEROES[0] — 영웅 선택 도입 시 교체
+    engineRef.current = engine;
   }, [size, config]);
 
   useEffect(() => {

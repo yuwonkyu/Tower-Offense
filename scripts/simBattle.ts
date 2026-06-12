@@ -100,6 +100,7 @@ console.log(`── 스테이지 ${stage} 시뮬레이션 (타워 ${config.tower
 
 while (elapsed < config.timeLimit && engine.result === 'ongoing') {
   autoPick();
+  engine.useHeroSkill(); // 준비되면 즉시 사용 (쿨다운/타깃 없음 시 무시)
   engine.tick(DT);
   elapsed += DT;
   if (Math.abs(elapsed % 60) < DT) {

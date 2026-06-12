@@ -155,7 +155,6 @@ export const useBattleStore = create<BattleState>((set, get) => ({
     const scaled = dt * s.speed;
 
     const timeLeft = Math.max(0, s.timeLeft - scaled);
-    const skillCooldown = Math.max(0, s.skillCooldown - scaled);
 
     if (timeLeft <= 0) {
       const elapsed = s.config ? s.config.timeLimit : 600;
@@ -163,7 +162,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       set({ timeLeft: 0, phase: 'defeat', clearTime: elapsed, goldEarned: gold });
       return;
     }
-    set({ timeLeft, skillCooldown, clearTime: (s.config?.timeLimit ?? 600) - timeLeft });
+    set({ timeLeft, clearTime: (s.config?.timeLimit ?? 600) - timeLeft });
   },
 
   syncFromEngine: (engine) => {
@@ -206,6 +205,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       heroLevel: engine.level,
       exp: engine.expInLevel,
       expToNext: engine.expToNext,
+      skillCooldown: engine.heroSkillCd,
       kills: engine.kills,
       deaths: s.deaths + deathDelta,
       reviveLeft: newRevive,
@@ -268,10 +268,9 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   useSkill: () => {
     const s = get();
-    if (s.skillCooldown > 0 || s.phase !== 'running') return;
-    // 스킬 쿨타임 감소 카드 적용
-    const cdr = s.engine ? s.engine.cards.cdrPct / 100 : 0;
-    set({ skillCooldown: s.hero.skill.cooldown * (1 - cdr) });
+    if (s.phase !== 'running' || !s.engine) return;
+    // 실효과는 엔진에서 발동 (투신/살소나기/피노을) — 쿨타임도 엔진이 관리
+    s.engine.useHeroSkill();
   },
 
   reset: () => {

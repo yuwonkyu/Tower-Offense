@@ -24,6 +24,8 @@ interface Props {
   onDoubleReward?: () => void;
   /** 보상 2배 적용 완료 */
   rewardDoubled?: boolean;
+  /** 재시도에 광고 필요 (패배 시, 광고 제거 미구매) */
+  retryNeedsAd?: boolean;
 }
 
 function formatTime(sec: number): string {
@@ -48,6 +50,7 @@ export function StageResultModal({
   onExit,
   onDoubleReward,
   rewardDoubled,
+  retryNeedsAd,
 }: Props) {
   const { victory, stage, kills, deaths, totalExp, goldEarned, clearTime, finalLevel } = result;
 
@@ -100,7 +103,9 @@ export function StageResultModal({
               <Text style={styles.btnSecondaryText}>나가기</Text>
             </Pressable>
             <Pressable style={styles.btnSecondary} onPress={onRetry}>
-              <Text style={styles.btnSecondaryText}>재시도</Text>
+              <Text style={styles.btnSecondaryText}>
+                {retryNeedsAd ? '📺 재도전' : '재시도'}
+              </Text>
             </Pressable>
             {victory && (
               <Pressable style={styles.btnPrimary} onPress={onNextStage}>

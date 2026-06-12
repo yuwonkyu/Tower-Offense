@@ -253,6 +253,13 @@ export class BattleEngine {
   readonly cards: CardSystem;
   /** 타워 무적 잔여 시간 (팔라딘 무적기) */
   invulnLeft = 0;
+  /** 영웅 스킬 남은 쿨타임 (초) — HUD가 동기화 */
+  heroSkillCd = 0;
+  /** 투신(스탯 버프) 잔여 시간 */
+  heroSkillBuffLeft = 0;
+  /** 영웅 스킬 메타 레벨 (5레벨마다 +1, progressStore) — 레벨당 계수 +2% */
+  heroSkillLevel = 1;
+  private heroBuffPct = 0;
 
   private spawnAcc = 0;
   private allySpawnAcc = 0;
@@ -320,10 +327,73 @@ export class BattleEngine {
     this.refreshHeroStats();
   }
 
+  /**
+   * 아군 영웅 스킬 발동 (설계 03). 타깃 없으면 쿨타임 소모 없이 false.
+   * - 마루한 투신: 60초간 전 스탯 % 버프
+   * - 미르 살소나기: 적 밀집 지점 광역 150%
+   * - 노을 피노을: 적 위치로 이동 + 광역 130% + 공격력 -20% 디버프
+   */
+  useHeroSkill(): boolean {
+    if (this.heroSkillCd > 0 || this.hero.state === 'dead' || this.result !== 'ongoing') {
+      return false;
+    }
+    const skill = this.heroDef.skill;
+    // 스킬 강화: 계수 × (1 + 레벨당 2%) — heroes.ts skillBonusPct와 동일 규칙
+    const ratio = skill.ratio * (1 + (this.heroSkillLevel - 1) * 0.02);
+
+    if (this.heroDef.id === 'maruhan') {
+      // 투신: 스탯 버프 (타깃 불필요)
+      this.heroBuffPct = ratio * 100;
+      this.heroSkillBuffLeft = skill.duration ?? 60;
+      this.refreshHeroStats();
+    } else {
+      // 타깃 지점: 영웅 주변 가장 가까운 적 (없으면 발동 보류)
+      const h = this.hero;
+      let target: CombatEntity | null = null;
+      let best = Infinity;
+      for (const c of this.entities) {
+        if (c.side !== 'enemy' || c.state === 'dead') continue;
+        const d = Math.hypot(c.x - h.x, c.y - h.y);
+        if (d < best && d <= HERO_AGGRO * 1.5) {
+          best = d;
+          target = c;
+        }
+      }
+      if (!target) return false;
+
+      const isNoeul = this.heroDef.id === 'noeul';
+      if (isNoeul) {
+        // 피노을: 지정 위치로 도약
+        h.x = target.x;
+        h.y = target.y;
+      }
+      const radius = isNoeul ? 4 : 6; // 살소나기는 더 넓은 화살비
+      const atk = h.atk * ratio;
+      for (const c of this.entities) {
+        if (c.side !== 'enemy' || c.state === 'dead') continue;
+        if (Math.hypot(c.x - target.x, c.y - target.y) > radius) continue;
+        this.hurt(c, damage(atk, c.def));
+        if (isDead(c)) continue;
+        if (isNoeul && !isStructure(c.kind)) c.atk *= 0.8; // 공격력 디버프
+      }
+    }
+
+    this.heroSkillCd = skill.cooldown * (1 - this.cards.cdrPct / 100);
+    return true;
+  }
+
   /** dt = 게임 시간 기준 경과 초 (배속 적용 후) */
   tick(dt: number) {
     if (this.result !== 'ongoing') return;
     this.time += dt;
+    this.heroSkillCd = Math.max(0, this.heroSkillCd - dt);
+    if (this.heroSkillBuffLeft > 0) {
+      this.heroSkillBuffLeft -= dt;
+      if (this.heroSkillBuffLeft <= 0) {
+        this.heroSkillBuffLeft = 0;
+        this.refreshHeroStats(); // 투신 종료 — 버프 해제
+      }
+    }
     // 시간 경과 EXP (초당 1): 처치 0이어도 레벨/카드가 돌게 하는 안전망
     this.timeExpAcc += dt;
     while (this.timeExpAcc >= 1) {
@@ -1252,13 +1322,15 @@ export class BattleEngine {
     const lv = this.level - 1;
     const m: UnitMods = this.cards.heroMods();
     const f = (pct: number) => 1 + pct / 100;
+    // 투신 버프: 지속 중 전 스탯 % 증가
+    const buff = this.heroSkillBuffLeft > 0 ? f(this.heroBuffPct) : 1;
     const h = this.hero;
     const hpRatio = h.maxHp > 0 ? h.hp / h.maxHp : 1;
-    h.atk = (s.atk + g.atk * lv) * f(m.atkPct);
-    h.def = (s.def + g.def * lv) * f(m.defPct);
-    h.maxHp = (s.hp + g.hp * lv) * f(m.hpPct);
+    h.atk = (s.atk + g.atk * lv) * f(m.atkPct) * buff;
+    h.def = (s.def + g.def * lv) * f(m.defPct) * buff;
+    h.maxHp = (s.hp + g.hp * lv) * f(m.hpPct) * buff;
     h.hp = h.maxHp * hpRatio;
-    h.atkSpeed = (s.atkSpeed + g.atkSpeed * lv) * f(m.atkSpeedPct);
+    h.atkSpeed = (s.atkSpeed + g.atkSpeed * lv) * f(m.atkSpeedPct) * buff;
     h.moveSpeed = s.moveSpeed * f(m.moveSpeedPct);
     h.range = s.range * f(m.rangePct);
     h.evade = m.evadePct / 100;
