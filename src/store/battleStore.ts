@@ -5,7 +5,7 @@ import type { CardDef, HeroDef, StageConfig, StageDifficulty } from '@/game/type
 import type { BattleEngine } from '@/game/engine/engine';
 import { getStageConfig } from '@/data/stages';
 import { HEROES } from '@/data/heroes';
-import { calcGoldReward } from '@/store/progressStore';
+import { calcGoldReward, useProgressStore } from '@/store/progressStore';
 
 export type BattlePhase = 'ready' | 'running' | 'cardPick' | 'victory' | 'defeat';
 
@@ -80,7 +80,14 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   startStage: (stage, difficulty = 'normal') => {
     const config = getStageConfig(stage, difficulty);
-    const hero = HEROES[0];
+    // 영웅 메타 스탯 적용
+    const progress = useProgressStore.getState();
+    const baseHero = HEROES[0];
+    const adjustedStats = progress.getHeroAdjustedStats(
+      baseHero.id,
+      baseHero.stats as unknown as Record<string, number>,
+    ) as unknown as typeof baseHero.stats;
+    const hero: HeroDef = { ...baseHero, stats: adjustedStats };
     set({
       config,
       hero,

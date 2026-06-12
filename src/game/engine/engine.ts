@@ -197,11 +197,16 @@ export class BattleEngine {
   private readonly miniBossCd = new Map<MiniBossId, number>();
   private bossAppearIdx = 0;
 
+  /** 유닛 메타 레벨 보너스: unitId → 추가 배수 (예: 0.05 = +5%) */
+  private readonly unitMetaBonus: Map<string, number>;
+
   constructor(
     readonly config: StageConfig,
     readonly field: FieldLayout,
     heroDef: HeroDef = HEROES[0],
+    unitMetaBonuses: Record<string, number> = {},
   ) {
+    this.unitMetaBonus = new Map(Object.entries(unitMetaBonuses));
     this.weights = spawnWeightsForStage(config.stage, config.enemyUnits);
     this.totalWeight = this.weights.reduce((sum, w) => sum + w.weight, 0);
     this.heroDef = heroDef;
@@ -296,7 +301,8 @@ export class BattleEngine {
 
   private makeUnit(side: Side, unitId: UnitId, x: number, y: number): CombatEntity {
     const def = unitDef(unitId);
-    const mult = side === 'enemy' ? this.config.statMultiplier : 1;
+    const metaBonus = side === 'ally' ? (this.unitMetaBonus.get(unitId) ?? 0) : 0;
+    const mult = (side === 'enemy' ? this.config.statMultiplier : 1) * (1 + metaBonus);
     const m = side === 'ally' ? this.cards.unitMods(unitId) : null;
     const f = (pct: number | undefined) => 1 + (pct ?? 0) / 100;
     return {

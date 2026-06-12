@@ -9,6 +9,7 @@ import {
   type EntityKind,
 } from '@/game/engine/engine';
 import type { StageConfig } from '@/game/types';
+import { useProgressStore } from '@/store/progressStore';
 
 /** 프로토타입 엔티티 표현: 원형 + 종류별 색상 (설계 01) */
 const UNIT_VISUALS: Record<EntityKind, { color: string; radius: number }> = {
@@ -63,7 +64,8 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
 
   useEffect(() => {
     if (!size) return;
-    engineRef.current = new BattleEngine(config, makeFieldLayout(size.h / size.w));
+    const unitMetaBonuses = useProgressStore.getState().getUnitMetaBonuses();
+    engineRef.current = new BattleEngine(config, makeFieldLayout(size.h / size.w), undefined, unitMetaBonuses);
   }, [size, config]);
 
   useEffect(() => {

@@ -9,7 +9,7 @@ import { Colors } from '@/constants/theme';
 import { cardById } from '@/data/cards';
 import { ENEMY_HEROES } from '@/data/enemyHeroes';
 import type { BattleEngine } from '@/game/engine/engine';
-import { CARD_PICK_SECONDS } from '@/game/formulas';
+import { CARD_PICK_SECONDS, heroMetaExpForStage } from '@/game/formulas';
 import { useBattleStore } from '@/store/battleStore';
 import { useProgressStore } from '@/store/progressStore';
 import { TOTAL_STAGES } from '@/data/stages';
@@ -58,14 +58,21 @@ export default function BattleScreen() {
   // 결과 확정 시 진행도 저장 (1회만)
   const engine = useBattleStore((s) => s.engine);
   useEffect(() => {
+    const heroId = 'maruhan'; // HEROES[0] — 추후 선택 영웅 ID로 교체
     if (phase === 'victory') {
       onStageClear({
         stage: stageNum,
         goldEarned,
         unlocksUnit: config?.unlocksUnit,
+        heroId,
+        heroExpGained: heroMetaExpForStage(stageNum, true),
       });
     } else if (phase === 'defeat') {
-      onStageDefeat({ goldEarned });
+      onStageDefeat({
+        goldEarned,
+        heroId,
+        heroExpGained: heroMetaExpForStage(stageNum, false),
+      });
     }
     // phase가 결과로 전환될 때만 1회 실행
     // eslint-disable-next-line react-hooks/exhaustive-deps
