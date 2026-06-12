@@ -109,6 +109,70 @@ export interface CombatEntity {
   retargetCd: number;
   targetId: number;
   state: EntityState;
+
+  // ── 프록 효과 (설계 04, 05 — 카드 부여) ──
+  /** 받는 피해 감소 0~1 */
+  dmgReduction: number;
+  /** 도발 확률 0~1 — 공격 시 주변 적 타깃 전환 */
+  taunt: number;
+  /** 관통 확률 0~1 — 1마리 추가 타격 */
+  pierce: number;
+  /** 추가피해 발동 확률 0~1 (추가타/불화살) */
+  bonusChance: number;
+  /** 추가피해량 — atk 대비 % (방어 미적용 고정) */
+  bonusDmgPct: number;
+  /** 출혈 발동 확률 0~1 */
+  bleedChance: number;
+  /** 출혈 초당 피해 — 대상 최대체력 % */
+  bleedDotPct: number;
+  /** 돌진 첫 타 추가피해 % (이속 보너스 포함) */
+  chargeDmgPct: number;
+  /** 돌진 준비 완료 (이동→교전 전환 시 세팅, 첫 타에 소모) */
+  chargeReady: boolean;
+  /** 화상 발동 확률 0~1 (투사체) */
+  burnChance: number;
+  /** 화상 초당 피해 — 대상 최대체력 % */
+  burnPct: number;
+  /** 타격 시 기절 (초, 투사체) */
+  stunOnHit: number;
+  /** 불굴 쿨타임 최대값 (0 = 미보유) */
+  undyingCdMax: number;
+  /** 불굴 남은 쿨타임 */
+  undyingCd: number;
+  // 상태이상 런타임 (피격측)
+  bleedLeft: number;
+  bleedRate: number; // HP/초
+  burnLeft: number;
+  burnRate: number; // HP/초
+}
+
+/** hurt() 등 호출 후 사망 재확인용 — TS narrowing 우회 */
+function isDead(e: CombatEntity): boolean {
+  return e.state === 'dead';
+}
+
+/** 프록/상태이상 필드 기본값 — 카드 미보유 엔티티용 */
+function zeroProcFields() {
+  return {
+    dmgReduction: 0,
+    taunt: 0,
+    pierce: 0,
+    bonusChance: 0,
+    bonusDmgPct: 0,
+    bleedChance: 0,
+    bleedDotPct: 0,
+    chargeDmgPct: 0,
+    chargeReady: false,
+    burnChance: 0,
+    burnPct: 0,
+    stunOnHit: 0,
+    undyingCdMax: 0,
+    undyingCd: 0,
+    bleedLeft: 0,
+    bleedRate: 0,
+    burnLeft: 0,
+    burnRate: 0,
+  };
 }
 
 /** 비행 중인 투사체 (투석기 등) — 발사 시점의 타깃 위치를 조준 */
@@ -123,6 +187,11 @@ export interface Projectile {
   atk: number;
   aoe: number;
   critChance: number;
+  /** 화상 프록 (투석기 화염공격 카드) */
+  burnChance: number;
+  burnPct: number;
+  /** 타격 시 기절 (투석기 기절 카드) */
+  stunSec: number;
   /** 발사자 id (피격 반격용) */
   attackerId: number;
   /** 타워 조준 (정지 목표 — 항상 명중) */
@@ -155,6 +224,14 @@ const BODY_RADIUS = 2;
 /** 적 스폰 워밍업: 시작 40% → 90초에 100% (카드가 점진 획득되는 초반 진형 구축 시간 확보) */
 const ENEMY_SPAWN_WARMUP_SECONDS = 90;
 const ENEMY_SPAWN_WARMUP_START = 0.4;
+/** 출혈/화상 지속 시간 (초) — 설계 04 (화염공격 3초 화상) */
+const DOT_DURATION = 3;
+/** 도발 반경 — 발동 시 이 범위의 적 타깃을 도발 유닛으로 전환 */
+const TAUNT_RADIUS = 6;
+/** 관통: 본 타깃 주변 이 반경 내 적 1마리 추가 타격 */
+const PIERCE_RADIUS = 3.5;
+/** 돌진: 교전 접근 이동 속도 배수 */
+const CHARGE_MOVE_MULT = 1.3;
 
 export type EngineResult = 'ongoing' | 'victory';
 
@@ -296,6 +373,7 @@ export class BattleEngine {
       retargetCd: 0,
       targetId: NO_TARGET,
       state: 'moving',
+      ...zeroProcFields(),
     };
   }
 
@@ -332,6 +410,20 @@ export class BattleEngine {
       retargetCd: Math.random() * 0.2,
       targetId: NO_TARGET,
       state: 'moving',
+      ...zeroProcFields(),
+      // 프록 카드 보정 (아군 전용)
+      dmgReduction: (m?.dmgReductionPct ?? 0) / 100,
+      taunt: (m?.tauntChance ?? 0) / 100,
+      pierce: (m?.pierceChance ?? 0) / 100,
+      bonusChance: (m?.bonusChance ?? 0) / 100,
+      bonusDmgPct: m?.bonusDmgPct ?? 0,
+      bleedChance: (m?.bleedChance ?? 0) / 100,
+      bleedDotPct: m?.bleedDotPct ?? 0,
+      chargeDmgPct: m?.chargeDmgPct ?? 0,
+      burnChance: (m?.burnChance ?? 0) / 100,
+      burnPct: m?.burnPct ?? 0,
+      stunOnHit: m?.stunSec ?? 0,
+      undyingCdMax: m?.undyingCooldownSec ?? 0,
     };
   }
 
@@ -367,6 +459,7 @@ export class BattleEngine {
       retargetCd: 0,
       targetId: NO_TARGET,
       state: 'moving',
+      ...zeroProcFields(),
     };
   }
 
@@ -436,6 +529,7 @@ export class BattleEngine {
       retargetCd: 0,
       targetId: NO_TARGET,
       state: 'moving',
+      ...zeroProcFields(),
     };
   }
 
@@ -488,6 +582,7 @@ export class BattleEngine {
       retargetCd: 0,
       targetId: NO_TARGET,
       state: 'moving',
+      ...zeroProcFields(),
     });
   }
 
@@ -574,6 +669,20 @@ export class BattleEngine {
     for (const e of this.entities) {
       if (e.state === 'dead') continue;
       if (isStructure(e.kind)) continue; // 구조물은 행동 없음 (트랩은 updateTraps)
+
+      // 상태이상 틱: 출혈/화상 DoT + 불굴 쿨다운 (기절 중에도 진행)
+      if (e.undyingCd > 0) e.undyingCd -= dt;
+      if (e.bleedLeft > 0) {
+        e.bleedLeft -= dt;
+        this.hurt(e, e.bleedRate * dt);
+        if (isDead(e)) continue;
+      }
+      if (e.burnLeft > 0) {
+        e.burnLeft -= dt;
+        this.hurt(e, e.burnRate * dt);
+        if (isDead(e)) continue;
+      }
+
       if (e.stunLeft > 0) {
         e.stunLeft -= dt;
         continue;
@@ -765,9 +874,14 @@ export class BattleEngine {
 
   private moveAttackEntity(e: CombatEntity, target: CombatEntity, dt: number) {
     const stopDist = Math.max(e.range, 1) + BODY_RADIUS;
-    const inRange = this.moveToward(e, target.x, target.y, stopDist, dt);
+    // 돌진: 교전 접근 이동 가속 (창병)
+    const moveDt = e.chargeDmgPct > 0 ? dt * CHARGE_MOVE_MULT : dt;
+    const wasMoving = e.state === 'moving';
+    const inRange = this.moveToward(e, target.x, target.y, stopDist, moveDt);
     e.state = inRange ? 'attacking' : 'moving';
     if (inRange && e.attackCd <= 0 && e.atkSpeed > 0) {
+      // 돌진 추가피해: 이동 끝에 진입한 첫 타에 적용
+      if (wasMoving && e.chargeDmgPct > 0) e.chargeReady = true;
       e.attackCd = 1 / e.atkSpeed;
       this.performAttack(e, target);
     }
@@ -824,6 +938,30 @@ export class BattleEngine {
       }
     } else {
       this.applyDamage(attacker, target);
+      // 관통: 본 타깃 근처 적 1마리 추가 타격 (활병)
+      if (attacker.pierce > 0 && Math.random() < attacker.pierce) {
+        let extra: CombatEntity | null = null;
+        let best = Infinity;
+        for (const c of this.entities) {
+          if (c.side === attacker.side || c.state === 'dead' || c.id === target.id) continue;
+          const d = Math.hypot(c.x - target.x, c.y - target.y);
+          if (d <= PIERCE_RADIUS && d < best) {
+            best = d;
+            extra = c;
+          }
+        }
+        if (extra) this.applyDamage(attacker, extra);
+      }
+    }
+    // 도발: 공격 시 확률로 주변 적 타깃을 자신으로 전환 (방패병)
+    if (attacker.taunt > 0 && Math.random() < attacker.taunt) {
+      for (const c of this.entities) {
+        if (c.side === attacker.side || c.state === 'dead' || isStructure(c.kind)) continue;
+        if (c.priority === 'healAlly' || c.kind === 'bomber') continue; // 고유 행동 유지
+        if (Math.hypot(c.x - attacker.x, c.y - attacker.y) <= TAUNT_RADIUS) {
+          c.targetId = attacker.id;
+        }
+      }
     }
   }
 
@@ -845,6 +983,9 @@ export class BattleEngine {
       atk,
       aoe: Math.max(attacker.aoe, 1.5),
       critChance: attacker.critChance,
+      burnChance: attacker.burnChance,
+      burnPct: attacker.burnPct,
+      stunSec: attacker.stunOnHit,
       attackerId: attacker.id,
       targetTower,
     });
@@ -881,10 +1022,17 @@ export class BattleEngine {
       if (Math.hypot(c.x - p.tx, c.y - p.ty) > p.aoe) continue;
       let dmg = damage(p.atk, c.def);
       if (p.critChance > 0 && Math.random() < p.critChance) dmg *= 1.5;
-      c.hp -= dmg;
-      if (c.hp <= 0) {
-        this.onDeath(c);
-      } else if (shooter && shooter.state !== 'dead') {
+      this.hurt(c, dmg);
+      if (isDead(c)) continue;
+      // 화상/기절 (투석기 화염공격·기절 카드) — % 피해형은 구조물 미적용
+      if (p.burnChance > 0 && !isStructure(c.kind) && Math.random() < p.burnChance) {
+        c.burnLeft = DOT_DURATION;
+        c.burnRate = (c.maxHp * p.burnPct) / 100;
+      }
+      if (p.stunSec > 0 && !isStructure(c.kind)) {
+        c.stunLeft = Math.max(c.stunLeft, p.stunSec);
+      }
+      if (shooter && shooter.state !== 'dead') {
         this.retaliate(c, shooter.id);
       }
     }
@@ -900,9 +1048,8 @@ export class BattleEngine {
         if (c.side !== 'ally' || c.state === 'dead') continue;
         if (Math.hypot(c.x - t.x, c.y - t.y) > TRAP_TRIGGER.radius) continue;
         const atk = TRAP_TRIGGER.atk * this.config.statMultiplier * TRAP_TRIGGER.ratio;
-        c.hp -= damage(atk, c.def);
+        this.hurt(c, damage(atk, c.def));
         c.stunLeft = Math.max(c.stunLeft, TRAP_TRIGGER.stunSec);
-        if (c.hp <= 0) this.onDeath(c);
         t.state = 'dead';
         t.hp = 0;
         break;
@@ -935,8 +1082,7 @@ export class BattleEngine {
         if (def.stats.aoe > 1.5) {
           this.areaDamage(target.x, target.y, def.stats.aoe, this.enemyHeroAtk);
         } else {
-          target.hp -= damage(this.enemyHeroAtk, target.def);
-          if (target.hp <= 0) this.onDeath(target);
+          this.hurt(target, damage(this.enemyHeroAtk, target.def));
         }
       } else {
         this.enemyHeroAtkCd = 0.2; // 사거리 내 아군 없음 — 재탐색
@@ -985,14 +1131,33 @@ export class BattleEngine {
     }
   }
 
-  /** 적 영웅 스킬/투사체용 광역 피해 — 아군 측에 적용 */
+  /** 적 영웅 스킬/투사체용 광역 피해 — 아군 측에 적용 (피해감소/불굴 hurt 경유) */
   private areaDamage(x: number, y: number, radius: number, atk: number) {
     for (const c of this.entities) {
       if (c.side !== 'ally' || c.state === 'dead') continue;
       if (Math.hypot(c.x - x, c.y - y) > radius) continue;
-      c.hp -= damage(atk, c.def);
-      if (c.hp <= 0) this.onDeath(c);
+      this.hurt(c, damage(atk, c.def));
     }
+  }
+
+  /**
+   * 최종 피해 적용 중앙화: 피해 감소(스펙) → HP 차감 → 불굴(HP 1 생존) → 사망.
+   * 반환 = 실제 가해진 피해 (흡혈 계산용)
+   */
+  private hurt(target: CombatEntity, dmg: number): number {
+    if (target.state === 'dead') return 0;
+    if (target.dmgReduction > 0) dmg *= 1 - target.dmgReduction;
+    target.hp -= dmg;
+    if (target.hp <= 0) {
+      // 불굴: 치명적 피해 시 HP 1로 생존 (쿨타임)
+      if (target.undyingCdMax > 0 && target.undyingCd <= 0 && !isStructure(target.kind)) {
+        target.hp = 1;
+        target.undyingCd = target.undyingCdMax;
+      } else {
+        this.onDeath(target);
+      }
+    }
+    return dmg;
   }
 
   private applyDamage(attacker: CombatEntity, target: CombatEntity) {
@@ -1004,15 +1169,30 @@ export class BattleEngine {
     }
     let dmg = damage(atk, target.def);
     if (attacker.critChance > 0 && Math.random() < attacker.critChance) dmg *= 1.5;
-    target.hp -= dmg;
+    // 추가타/불화살: 공격력 % 고정 추가피해 (방어 미적용)
+    if (attacker.bonusChance > 0 && Math.random() < attacker.bonusChance) {
+      dmg += atk * (attacker.bonusDmgPct / 100);
+    }
+    // 돌진: 이동 후 첫 타 추가피해 (1회 소모)
+    if (attacker.chargeReady) {
+      attacker.chargeReady = false;
+      dmg *= 1 + attacker.chargeDmgPct / 100;
+    }
+    const dealt = this.hurt(target, dmg);
     if (attacker.lifestealPct > 0 && attacker.state !== 'dead') {
-      attacker.hp = Math.min(attacker.maxHp, attacker.hp + dmg * attacker.lifestealPct);
+      attacker.hp = Math.min(attacker.maxHp, attacker.hp + dealt * attacker.lifestealPct);
     }
-    if (target.hp <= 0) {
-      this.onDeath(target);
-    } else {
-      this.retaliate(target, attacker.id);
+    if (isDead(target)) return;
+    // 출혈: % 피해형 — 타워/구조물 미적용 (설계 04)
+    if (
+      attacker.bleedChance > 0 &&
+      !isStructure(target.kind) &&
+      Math.random() < attacker.bleedChance
+    ) {
+      target.bleedLeft = DOT_DURATION;
+      target.bleedRate = (target.maxHp * attacker.bleedDotPct) / 100;
     }
+    this.retaliate(target, attacker.id);
   }
 
   /**
@@ -1086,6 +1266,9 @@ export class BattleEngine {
     h.lifestealPct = m.lifestealPct / 100;
     h.regenPctPerSec = m.regenPctPerSec;
     h.frenzyAtkPct = m.frenzyAtkPct;
+    // 영웅 프록 (글로벌 카드 — 불굴 등)
+    h.dmgReduction = m.dmgReductionPct / 100;
+    h.undyingCdMax = m.undyingCooldownSec;
   }
 
   // ── 특수 유닛 ─────────────────────────────────────────
