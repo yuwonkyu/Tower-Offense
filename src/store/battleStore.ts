@@ -5,6 +5,7 @@ import type { CardDef, HeroDef, StageConfig, StageDifficulty } from '@/game/type
 import type { BattleEngine } from '@/game/engine/engine';
 import { getStageConfig } from '@/data/stages';
 import { HEROES } from '@/data/heroes';
+import { calcGoldReward } from '@/store/progressStore';
 
 export type BattlePhase = 'ready' | 'running' | 'cardPick' | 'victory' | 'defeat';
 
@@ -27,6 +28,12 @@ interface BattleState {
   /** 스킬 남은 쿨타임 (초) */
   skillCooldown: number;
   kills: number;
+  /** 영웅 사망 횟수 (정산용) */
+  deaths: number;
+  /** 결과 확정 시점까지 경과한 게임 내 시간 (초) */
+  clearTime: number;
+  /** 이번 전투에서 획득할 금화 (정산에서 읽기용) */
+  goldEarned: number;
   /** 영웅 부활 카운트다운 (0 = 생존) */
   reviveLeft: number;
   /** 보유 카드 (cardId → 레벨) */
@@ -63,6 +70,9 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   expToNext: expToNextLevel(1),
   skillCooldown: 0,
   kills: 0,
+  deaths: 0,
+  clearTime: 0,
+  goldEarned: 0,
   reviveLeft: 0,
   pickedCards: {},
   pickChoices: [],
@@ -85,6 +95,9 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       expToNext: expToNextLevel(1),
       skillCooldown: 0,
       kills: 0,
+      deaths: 0,
+      clearTime: 0,
+      goldEarned: 0,
       reviveLeft: 0,
       pickedCards: {},
       pickChoices: [],
@@ -118,10 +131,12 @@ export const useBattleStore = create<BattleState>((set, get) => ({
     const skillCooldown = Math.max(0, s.skillCooldown - scaled);
 
     if (timeLeft <= 0) {
-      set({ timeLeft: 0, phase: 'defeat' });
+      const elapsed = s.config ? s.config.timeLimit : 600;
+      const gold = calcGoldReward(s.config?.stage ?? 1, s.kills, false);
+      set({ timeLeft: 0, phase: 'defeat', clearTime: elapsed, goldEarned: gold });
       return;
     }
-    set({ timeLeft, skillCooldown });
+    set({ timeLeft, skillCooldown, clearTime: (s.config?.timeLimit ?? 600) - timeLeft });
   },
 
   syncFromEngine: (engine) => {
@@ -146,6 +161,16 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       engine.pendingPicks = 0; // 풀 고갈 — 선택 생략 (TODO: 재화 카드)
     }
 
+    // 영웅 사망 감지: reviveLeft가 새로 생겼으면 사망 1회
+    const prevRevive = s.reviveLeft;
+    const newRevive = engine.reviveLeft;
+    const deathDelta = prevRevive === 0 && newRevive > 0 ? 1 : 0;
+
+    const isVictory = engine.result === 'victory';
+    const goldEarned = isVictory
+      ? calcGoldReward(s.config?.stage ?? 1, engine.kills, true)
+      : s.goldEarned;
+
     set({
       towerHp: engine.towerHp,
       heroHp: engine.hero.hp,
@@ -154,8 +179,10 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       exp: engine.expInLevel,
       expToNext: engine.expToNext,
       kills: engine.kills,
-      reviveLeft: engine.reviveLeft,
-      ...(engine.result === 'victory' ? { phase: 'victory' as const } : null),
+      deaths: s.deaths + deathDelta,
+      reviveLeft: newRevive,
+      goldEarned,
+      ...(isVictory ? { phase: 'victory' as const } : null),
     });
   },
 
