@@ -3,9 +3,12 @@ import { useCallback, useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BattleField } from '@/components/BattleField';
+import { CardPickModal } from '@/components/CardPickModal';
 import { Colors } from '@/constants/theme';
+import { cardById } from '@/data/cards';
 import { ENEMY_HEROES } from '@/data/enemyHeroes';
 import type { BattleEngine } from '@/game/engine/engine';
+import { CARD_PICK_SECONDS } from '@/game/formulas';
 import { useBattleStore } from '@/store/battleStore';
 
 const CARD_SLOTS = 8;
@@ -35,7 +38,10 @@ export default function BattleScreen() {
   const kills = useBattleStore((s) => s.kills);
   const reviveLeft = useBattleStore((s) => s.reviveLeft);
   const pickedCards = useBattleStore((s) => s.pickedCards);
+  const pickChoices = useBattleStore((s) => s.pickChoices);
+  const pickTimeLeft = useBattleStore((s) => s.pickTimeLeft);
   const startStage = useBattleStore((s) => s.startStage);
+  const pickCard = useBattleStore((s) => s.pickCard);
   const cycleSpeed = useBattleStore((s) => s.cycleSpeed);
   const useSkill = useBattleStore((s) => s.useSkill);
   const reset = useBattleStore((s) => s.reset);
@@ -150,10 +156,17 @@ export default function BattleScreen() {
             <View style={styles.cardRow}>
               {Array.from({ length: CARD_SLOTS }, (_, i) => {
                 const cardId = cardIds[i];
+                const card = cardId ? cardById(cardId) : undefined;
+                const lv = cardId ? pickedCards[cardId] : 0;
                 return (
                   <View key={i} style={[styles.cardSlot, !cardId && styles.cardSlotEmpty]}>
-                    {cardId ? (
-                      <Text style={styles.cardSlotText}>{pickedCards[cardId]}</Text>
+                    {card ? (
+                      <>
+                        <Text style={styles.cardSlotText}>{card.name.slice(0, 2)}</Text>
+                        {card.kind !== 'unit' && (
+                          <Text style={styles.cardSlotLv}>{lv}</Text>
+                        )}
+                      </>
                     ) : (
                       <Text style={styles.cardSlotPlus}>+</Text>
                     )}
@@ -184,6 +197,18 @@ export default function BattleScreen() {
       <View style={styles.expBar}>
         <View style={[styles.expFill, { width: `${expPct * 100}%` }]} />
       </View>
+
+      {/* ── 카드 선택 (레벨업 / 전투 시작) — 전투 일시정지 ── */}
+      {phase === 'cardPick' && (
+        <CardPickModal
+          choices={pickChoices}
+          ownedLevels={pickedCards}
+          timeLeft={pickTimeLeft}
+          totalTime={CARD_PICK_SECONDS}
+          level={heroLevel}
+          onPick={pickCard}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -348,7 +373,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.cardEmptyBorder,
     borderStyle: 'dashed',
   },
-  cardSlotText: { fontSize: 10, color: 'rgba(220,190,80,0.85)' },
+  cardSlotText: { fontSize: 9, color: 'rgba(220,190,80,0.85)' },
+  cardSlotLv: {
+    position: 'absolute',
+    top: 1,
+    right: 3,
+    fontSize: 8,
+    fontWeight: '700',
+    color: 'rgba(120,200,255,0.9)',
+  },
   cardSlotPlus: { fontSize: 12, color: 'rgba(110,110,140,0.4)' },
 
   skillBtn: {

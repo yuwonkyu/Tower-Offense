@@ -4,13 +4,14 @@ import type { UnitDef } from '@/game/types';
  * 신규 적 유닛 7종 (설계 12 — 인간 종족 확장).
  * unlockStage = 적측 첫 등장 스테이지 클리어 시 아군 카드 해금.
  * 마법사는 업그레이드 라인: 신규 등급 등장 시 이전 등급은 적 풀에서 점차 제외.
+ * 원거리 사거리는 설계 원본 ×0.6 (가로 160 맵 재조정).
  */
 export const NEW_ENEMY_UNITS: UnitDef[] = [
   {
     id: 'mageLow',
     name: '하급 마법사',
     concept: '매직미사일 (단일)',
-    stats: { atk: 30, def: 5, hp: 40, moveSpeed: 4, range: 15, atkSpeed: 0.7, aoe: 1 },
+    stats: { atk: 30, def: 5, hp: 40, moveSpeed: 4, range: 9, atkSpeed: 0.7, aoe: 1 },
     priority: 'nearest',
     exp: 6,
     unlockStage: 11,
@@ -21,7 +22,7 @@ export const NEW_ENEMY_UNITS: UnitDef[] = [
     id: 'mageMid',
     name: '중급 마법사',
     concept: '매직볼 (광역 소형)',
-    stats: { atk: 40, def: 5, hp: 50, moveSpeed: 4, range: 16, atkSpeed: 0.7, aoe: 1.5 },
+    stats: { atk: 40, def: 5, hp: 50, moveSpeed: 4, range: 10, atkSpeed: 0.7, aoe: 1.5 },
     priority: 'nearest',
     exp: 10,
     unlockStage: 18,
@@ -32,7 +33,7 @@ export const NEW_ENEMY_UNITS: UnitDef[] = [
     id: 'mageHigh',
     name: '상급 마법사',
     concept: '체인 라이트닝',
-    stats: { atk: 55, def: 5, hp: 60, moveSpeed: 4, range: 17, atkSpeed: 0.7, aoe: 1.5 },
+    stats: { atk: 55, def: 5, hp: 60, moveSpeed: 4, range: 10, atkSpeed: 0.7, aoe: 1.5 },
     priority: 'nearest',
     exp: 15,
     unlockStage: 25,

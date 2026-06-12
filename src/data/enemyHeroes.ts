@@ -26,7 +26,8 @@ export const ENEMY_HEROES: EnemyHeroDef[] = [
     name: '마법사',
     concept: '인간의 비전 — 지식 탐구, 광역 마법 폭격',
     stageRange: [11, 20],
-    stats: { atk: 30, def: 10, hp: 220, range: 18, atkSpeed: 0.8, aoe: 1 },
+    // 원거리 사거리 ×0.6 재조정 (18→11)
+    stats: { atk: 30, def: 10, hp: 220, range: 11, atkSpeed: 0.8, aoe: 1 },
     skills: [
       {
         name: '필드 랜덤 메테오',

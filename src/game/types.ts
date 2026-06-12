@@ -54,8 +54,16 @@ export interface UnitDef {
   unlockStage: number;
   /** 적측 첫 등장 스테이지 (기본 5종은 1) */
   enemyDebutStage: number;
+  /**
+   * 투사체 속도 (논리 단위/초). 설정 시 지면 조준 — 비행 중 타깃이 움직이면 빗나감.
+   * 미설정 = 즉시 명중 (히트스캔)
+   */
+  projectileSpeed?: number;
   special?: string;
 }
+
+/** 구조물 종류 (설계 11) */
+export type StructureKind = 'wall' | 'barricade' | 'trap';
 
 export interface HeroGrowth {
   atk: number;
