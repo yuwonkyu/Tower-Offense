@@ -100,6 +100,7 @@ interface ProgressState {
   pullHeroGacha: () => { heroId: string; isDupe: boolean; expGained: number };
 
   // ── 재화 ──
+  addGold: (amount: number) => void;
   addDiamonds: (amount: number) => void;
   spendGold: (amount: number) => boolean;
   spendDiamonds: (amount: number) => boolean;
@@ -307,6 +308,8 @@ export const useProgressStore = create<ProgressState>()(
       },
 
       // ── 재화 ───────────────────────────────────────────────────────
+
+      addGold: (amount) => set((s) => ({ gold: s.gold + amount })),
 
       addDiamonds: (amount) => set((s) => ({ diamonds: s.diamonds + amount })),
 

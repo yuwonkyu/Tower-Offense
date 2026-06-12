@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AdStubModal } from '@/components/AdStubModal';
 import { BattleField } from '@/components/BattleField';
 import { CardPickModal } from '@/components/CardPickModal';
 import { StageResultModal } from '@/components/StageResultModal';
@@ -46,6 +47,8 @@ export default function BattleScreen() {
   const pickedCards = useBattleStore((s) => s.pickedCards);
   const pickChoices = useBattleStore((s) => s.pickChoices);
   const pickTimeLeft = useBattleStore((s) => s.pickTimeLeft);
+  const rerollUsed = useBattleStore((s) => s.rerollUsed);
+  const rewardDoubled = useBattleStore((s) => s.rewardDoubled);
   const startStage = useBattleStore((s) => s.startStage);
   const pickCard = useBattleStore((s) => s.pickCard);
   const cycleSpeed = useBattleStore((s) => s.cycleSpeed);
@@ -54,6 +57,26 @@ export default function BattleScreen() {
 
   const onStageClear = useProgressStore((s) => s.onStageClear);
   const onStageDefeat = useProgressStore((s) => s.onStageDefeat);
+
+  /** 진행 중인 광고 보상 종류 (null = 광고 없음) */
+  const [adKind, setAdKind] = useState<'doubleReward' | 'cardReroll' | 'speedX4' | null>(null);
+
+  const handleAdReward = () => {
+    const store = useBattleStore.getState();
+    if (adKind === 'speedX4') {
+      store.unlockX4();
+    } else if (adKind === 'cardReroll') {
+      store.rerollCards();
+    } else if (adKind === 'doubleReward') {
+      const delta = store.applyDoubleReward();
+      if (delta > 0) useProgressStore.getState().addGold(delta);
+    }
+    setAdKind(null);
+  };
+
+  const handleSpeedPress = () => {
+    if (cycleSpeed() === 'needsX4Ad') setAdKind('speedX4');
+  };
 
   // 결과 확정 시 진행도 저장 (1회만)
   const engine = useBattleStore((s) => s.engine);
@@ -126,7 +149,7 @@ export default function BattleScreen() {
           <View style={styles.timerChip}>
             <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
           </View>
-          <Pressable style={styles.speedChip} onPress={cycleSpeed}>
+          <Pressable style={styles.speedChip} onPress={handleSpeedPress}>
             <Text style={styles.speedText}>x{speed}</Text>
           </Pressable>
         </View>
@@ -229,6 +252,8 @@ export default function BattleScreen() {
           totalTime={CARD_PICK_SECONDS}
           level={heroLevel}
           onPick={pickCard}
+          onReroll={() => setAdKind('cardReroll')}
+          rerollUsed={rerollUsed}
         />
       )}
 
@@ -253,8 +278,17 @@ export default function BattleScreen() {
             router.replace({ pathname: '/battle', params: { stage: stageNum } });
           }}
           onExit={() => router.back()}
+          onDoubleReward={() => setAdKind('doubleReward')}
+          rewardDoubled={rewardDoubled}
         />
       )}
+
+      {/* ── 광고 스텁 (설계 06 IAA — x4 / 카드 재선택 / 보상 2배) ── */}
+      <AdStubModal
+        visible={adKind !== null}
+        onReward={handleAdReward}
+        onClose={() => setAdKind(null)}
+      />
     </SafeAreaView>
   );
 }

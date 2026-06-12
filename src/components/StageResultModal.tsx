@@ -20,6 +20,10 @@ interface Props {
   onNextStage: () => void;
   onRetry: () => void;
   onExit: () => void;
+  /** 광고 보고 보상 2배 (설계 06 IAA) — undefined면 숨김 */
+  onDoubleReward?: () => void;
+  /** 보상 2배 적용 완료 */
+  rewardDoubled?: boolean;
 }
 
 function formatTime(sec: number): string {
@@ -37,7 +41,14 @@ function StatRow({ label, value, highlight }: { label: string; value: string; hi
   );
 }
 
-export function StageResultModal({ result, onNextStage, onRetry, onExit }: Props) {
+export function StageResultModal({
+  result,
+  onNextStage,
+  onRetry,
+  onExit,
+  onDoubleReward,
+  rewardDoubled,
+}: Props) {
   const { victory, stage, kills, deaths, totalExp, goldEarned, clearTime, finalLevel } = result;
 
   return (
@@ -69,6 +80,17 @@ export function StageResultModal({ result, onNextStage, onRetry, onExit }: Props
             </View>
             {!victory && (
               <Text style={styles.defeatNote}>※ 패배 보상 30% 적용</Text>
+            )}
+            {victory && onDoubleReward && (
+              <Pressable
+                style={[styles.doubleBtn, rewardDoubled && styles.doubleBtnUsed]}
+                onPress={onDoubleReward}
+                disabled={rewardDoubled}
+              >
+                <Text style={styles.doubleBtnText}>
+                  {rewardDoubled ? '보상 2배 적용됨 ✓' : '📺 광고 보고 금화 2배'}
+                </Text>
+              </Pressable>
             )}
           </View>
 
@@ -157,6 +179,18 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: -4,
   },
+
+  doubleBtn: {
+    marginTop: 4,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: 'rgba(241,196,15,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(241,196,15,0.4)',
+    alignItems: 'center',
+  },
+  doubleBtnUsed: { opacity: 0.4 },
+  doubleBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gold },
 
   btnRow: {
     flexDirection: 'row',

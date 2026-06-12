@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AdStubModal } from '@/components/AdStubModal';
 import { Colors } from '@/constants/theme';
 import { HEROES } from '@/data/heroes';
 import { BASE_UNITS } from '@/data/units';
@@ -8,6 +9,12 @@ import { NEW_ENEMY_UNITS } from '@/data/enemyUnits';
 import type { HeroId, UnitId } from '@/game/types';
 import { UNIT_GACHA_COST, HERO_GACHA_COST } from '@/game/formulas';
 import { useProgressStore } from '@/store/progressStore';
+import {
+  AD_FREE_DIAMONDS,
+  IAP_PRODUCTS,
+  useMonetizationStore,
+  type IapProductId,
+} from '@/store/monetizationStore';
 
 const ALL_UNIT_MAP = new Map<UnitId, (typeof BASE_UNITS)[0]>(
   [...BASE_UNITS, ...NEW_ENEMY_UNITS].map((u) => [u.id as UnitId, u]),
@@ -23,8 +30,19 @@ export default function ShopScreen() {
   const gold = useProgressStore((s) => s.gold);
   const pullUnitGacha = useProgressStore((s) => s.pullUnitGacha);
   const pullHeroGacha = useProgressStore((s) => s.pullHeroGacha);
+  const addDiamonds = useProgressStore((s) => s.addDiamonds);
+
+  const adFree = useMonetizationStore((s) => s.adFree);
+  const canWatchAd = useMonetizationStore((s) => s.canWatchAd);
+  const purchase = useMonetizationStore((s) => s.purchase);
 
   const [result, setResult] = useState<GachaResult | null>(null);
+  const [adVisible, setAdVisible] = useState(false);
+  const [purchased, setPurchased] = useState<IapProductId | null>(null);
+
+  const handlePurchase = (productId: IapProductId) => {
+    if (purchase(productId)) setPurchased(productId);
+  };
 
   const handleUnitPull = () => {
     const items = pullUnitGacha();
@@ -97,16 +115,87 @@ export default function ShopScreen() {
           </Pressable>
         </View>
 
-        {/* IAP 스텁 */}
-        <View style={[styles.card, styles.cardIap]}>
-          <Text style={styles.cardTitle}>다이아 패키지</Text>
-          <Text style={styles.cardDesc}>결제 연동 예정 (IAP)</Text>
+        {/* 무료 다이아 (IAA) */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>무료 다이아</Text>
+            <View style={styles.costChip}>
+              <Text style={[styles.costText, { color: Colors.gold }]}>📺 광고</Text>
+            </View>
+          </View>
+          <Text style={styles.cardDesc}>광고 시청 → 다이아 {AD_FREE_DIAMONDS}개 (일일 한도 공유)</Text>
+          <Pressable
+            style={[styles.pullBtn, !canWatchAd() && styles.pullBtnDisabled]}
+            onPress={() => setAdVisible(true)}
+            disabled={!canWatchAd()}
+          >
+            <Text style={styles.pullBtnText}>
+              {canWatchAd() ? '광고 보기' : '오늘 한도 소진'}
+            </Text>
+          </Pressable>
         </View>
-        <View style={[styles.card, styles.cardIap]}>
-          <Text style={styles.cardTitle}>광고 제거 + x4 영구</Text>
-          <Text style={styles.cardDesc}>평생 1회 결제 · 광고 제거 + x4 배속 영구 해금 (IAP)</Text>
+
+        {/* IAP 스텁 — 결제 성공 가정 후 즉시 지급 */}
+        <Text style={styles.sectionLabel}>패키지 (IAP 스텁)</Text>
+        {(['diamondsSmall', 'diamondsLarge', 'goldPack'] as const).map((id) => (
+          <View key={id} style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>{IAP_PRODUCTS[id].name}</Text>
+              <View style={styles.costChip}>
+                <Text style={[styles.costText, { color: Colors.textMain }]}>
+                  {IAP_PRODUCTS[id].priceLabel}
+                </Text>
+              </View>
+            </View>
+            <Pressable style={styles.pullBtn} onPress={() => handlePurchase(id)}>
+              <Text style={styles.pullBtnText}>구매 (스텁)</Text>
+            </Pressable>
+          </View>
+        ))}
+
+        {/* 광고 제거 buyout */}
+        <View style={[styles.card, adFree && styles.cardOwned]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{IAP_PRODUCTS.adFree.name}</Text>
+            <View style={styles.costChip}>
+              <Text style={[styles.costText, { color: Colors.textMain }]}>
+                {adFree ? '보유' : IAP_PRODUCTS.adFree.priceLabel}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.cardDesc}>
+            평생 1회 결제 · 인터스티셜 광고 제거 + x4 배속 영구 해금
+          </Text>
+          {!adFree && (
+            <Pressable style={styles.pullBtn} onPress={() => handlePurchase('adFree')}>
+              <Text style={styles.pullBtnText}>구매 (스텁)</Text>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
+
+      {/* 무료 다이아 광고 */}
+      <AdStubModal
+        visible={adVisible}
+        onReward={() => {
+          addDiamonds(AD_FREE_DIAMONDS);
+          setAdVisible(false);
+        }}
+        onClose={() => setAdVisible(false)}
+      />
+
+      {/* 구매 완료 토스트 모달 */}
+      {purchased && (
+        <Modal transparent animationType="fade" statusBarTranslucent>
+          <Pressable style={styles.resultBackdrop} onPress={() => setPurchased(null)}>
+            <View style={styles.resultCard}>
+              <Text style={styles.resultTitle}>구매 완료</Text>
+              <Text style={styles.resultHeroName}>{IAP_PRODUCTS[purchased].name}</Text>
+              <Text style={styles.resultClose}>탭하여 닫기</Text>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
 
       {/* 결과 모달 */}
       {result && (
@@ -193,7 +282,8 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 8,
   },
-  cardIap: { opacity: 0.5 },
+  cardOwned: { opacity: 0.6, borderColor: 'rgba(100,200,100,0.35)' },
+  sectionLabel: { fontSize: 12, color: Colors.gold, fontWeight: '600', marginTop: 6 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.textMain },
   costChip: {
