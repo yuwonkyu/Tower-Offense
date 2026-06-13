@@ -18,6 +18,8 @@ export default function HeroesScreen() {
   const upgradeHeroSkill = useProgressStore((s) => s.upgradeHeroSkill);
   const resetHeroStats = useProgressStore((s) => s.resetHeroStats);
   const diamonds = useProgressStore((s) => s.diamonds);
+  const selectedHeroId = useProgressStore((s) => s.selectedHeroId);
+  const selectHero = useProgressStore((s) => s.selectHero);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -26,12 +28,13 @@ export default function HeroesScreen() {
         {HEROES.map((hero) => {
           const meta = getHeroMeta(hero.id);
           const expPct = meta.expToNext > 0 ? meta.expInLevel / meta.expToNext : 0;
+          const isSelected = hero.id === selectedHeroId;
 
           return (
-            <View key={hero.id} style={styles.card}>
+            <View key={hero.id} style={[styles.card, isSelected && styles.cardSelected]}>
               {/* 초상화 + 레벨 */}
               <View style={styles.topRow}>
-                <View style={styles.portrait}>
+                <View style={[styles.portrait, isSelected && styles.portraitSelected]}>
                   <Text style={styles.portraitText}>{hero.name[0]}</Text>
                 </View>
                 <View style={styles.heroInfo}>
@@ -40,6 +43,15 @@ export default function HeroesScreen() {
                     <View style={styles.lvBadge}>
                       <Text style={styles.lvText}>Lv.{meta.level}</Text>
                     </View>
+                    <Pressable
+                      style={[styles.deployChip, isSelected && styles.deployChipActive]}
+                      onPress={() => selectHero(hero.id)}
+                      disabled={isSelected}
+                    >
+                      <Text style={[styles.deployText, isSelected && styles.deployTextActive]}>
+                        {isSelected ? '⚔ 출전 중' : '출전'}
+                      </Text>
+                    </Pressable>
                   </View>
                   <Text style={styles.concept}>{hero.concept}</Text>
                   {/* EXP 바 */}
@@ -140,6 +152,10 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
+  cardSelected: {
+    borderColor: 'rgba(120,200,255,0.7)',
+    backgroundColor: 'rgba(100,180,255,0.08)',
+  },
 
   topRow: { flexDirection: 'row', gap: 12 },
   portrait: {
@@ -152,6 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  portraitSelected: { borderColor: 'rgba(120,200,255,0.9)', borderWidth: 2 },
   portraitText: { fontSize: 22, color: Colors.heroText, fontWeight: '700' },
   heroInfo: { flex: 1, gap: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -165,6 +182,21 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   lvText: { fontSize: 11, fontWeight: '700', color: 'rgba(190,150,255,0.9)' },
+  deployChip: {
+    marginLeft: 'auto',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  deployChipActive: {
+    backgroundColor: 'rgba(100,180,255,0.18)',
+    borderColor: 'rgba(120,200,255,0.6)',
+  },
+  deployText: { fontSize: 11, fontWeight: '700', color: Colors.textSub },
+  deployTextActive: { color: 'rgba(140,200,255,0.95)' },
   concept: { fontSize: 11, color: Colors.textSub },
   expBarBg: {
     height: 5,

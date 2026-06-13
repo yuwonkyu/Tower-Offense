@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { TOTAL_STAGES } from '@/data/stages';
 import { enemyHeroForStage } from '@/data/enemyHeroes';
+import { HEROES } from '@/data/heroes';
 import { TOWER_TABLE } from '@/data/towers';
 import { useProgressStore } from '@/store/progressStore';
 
@@ -12,6 +13,8 @@ const STAGES = Array.from({ length: TOTAL_STAGES }, (_, i) => i + 1);
 export default function HomeScreen() {
   const clearedStage = useProgressStore((s) => s.clearedStage);
   const gold = useProgressStore((s) => s.gold);
+  const selectedHeroId = useProgressStore((s) => s.selectedHeroId);
+  const selectedHero = HEROES.find((h) => h.id === selectedHeroId) ?? HEROES[0];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -20,6 +23,12 @@ export default function HomeScreen() {
         <Text style={styles.subtitle}>인간 종족 — 일반 모드</Text>
         <Text style={styles.goldChip}>◈ {gold.toLocaleString()}</Text>
       </View>
+      <Pressable style={styles.heroBar} onPress={() => router.push('/heroes')}>
+        <Text style={styles.heroBarText}>
+          ⚔ 출전 영웅 · <Text style={styles.heroBarName}>{selectedHero.name}</Text>
+        </Text>
+        <Text style={styles.heroBarHint}>변경 ›</Text>
+      </Pressable>
       <FlatList
         data={STAGES}
         keyExtractor={(n) => String(n)}
@@ -76,6 +85,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.gold,
   },
+  heroBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 12,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(100,180,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(120,200,255,0.35)',
+  },
+  heroBarText: { fontSize: 13, color: Colors.textSub },
+  heroBarName: { fontSize: 13, fontWeight: '700', color: 'rgba(140,200,255,0.95)' },
+  heroBarHint: { fontSize: 12, color: Colors.textDim },
   grid: { paddingHorizontal: 12, paddingBottom: 24 },
   cell: {
     flex: 1,

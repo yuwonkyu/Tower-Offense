@@ -35,14 +35,11 @@
 
 ## 3. ▶ 다음 작업 큐 (이 순서로)
 
-### 6. 전투 영웅 선택 (현재 마루한 고정)
-- 현 상태: `battleStore.startStage`가 `HEROES[0]` 하드코딩, `BattleField.tsx:70`이 `'maruhan'` 하드코딩
-- 할 일:
-  - `progressStore`에 `selectedHeroId`(영구 저장, 기본 'maruhan') + `selectHero()` 추가
-  - 영웅 선택 UI (홈 또는 영웅 탭)
-  - `startStage`가 선택 영웅 사용, `BattleField`가 엔진 생성자(3번째 인자 heroDef) + 해당 영웅 skillLevel 전달
+### ~~6. 전투 영웅 선택~~ ✅ 완료 (2026-06-13)
+- `progressStore.selectedHeroId`(영구 저장) + `selectHero()`, 영웅 탭 출전 버튼, 홈 출전 영웅 바
+- `startStage`·`BattleField`가 선택 영웅 + 메타 스탯·skillLevel 반영 (메타 스탯 미반영 버그도 같이 해결)
 
-### 3. 카드 개편 + 근접 유지력 (가장 큰 작업) ⭐
+### 3. 카드 개편 + 근접 유지력 (가장 큰 작업) ⭐ ← **다음**
 **유저 승인 완료한 구조 — 그대로 구현:**
 - 유닛 카드 = **Lv1→Lv5 업그레이드 트랙** (특성 5장을 유닛 레벨에 흡수)
   - Lv1 생성 / Lv2 스탯업 / **Lv3 특수기술#1** / Lv4 스탯업 / **Lv5(MAX) 특수기술#2**

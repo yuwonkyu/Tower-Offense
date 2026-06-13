@@ -115,7 +115,7 @@ export default function BattleScreen() {
   // 결과 확정 시 진행도 저장 (1회만)
   const engine = useBattleStore((s) => s.engine);
   useEffect(() => {
-    const heroId = 'maruhan'; // HEROES[0] — 추후 선택 영웅 ID로 교체
+    const heroId = hero.id; // 선택 영웅
     if (phase === 'victory') {
       onStageClear({
         stage: stageNum,
@@ -212,6 +212,7 @@ export default function BattleScreen() {
         {/* 전투 캔버스: 타워 / 양측 유닛 자동 전투 / 영웅 */}
         <BattleField
           config={config}
+          heroDef={hero}
           speed={speed}
           running={phase === 'running' && adKind === null && !menuOpen}
           towerPct={towerPct}

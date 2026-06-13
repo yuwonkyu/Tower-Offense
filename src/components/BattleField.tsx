@@ -8,7 +8,7 @@ import {
   type CombatEntity,
   type EntityKind,
 } from '@/game/engine/engine';
-import type { StageConfig } from '@/game/types';
+import type { HeroDef, StageConfig } from '@/game/types';
 import { useProgressStore } from '@/store/progressStore';
 
 /** 프로토타입 엔티티 표현: 원형 + 종류별 색상 (설계 01) */
@@ -42,6 +42,8 @@ const ALLY_STROKE = 'rgba(120,200,255,0.9)';
 
 interface Props {
   config: StageConfig;
+  /** 출전 영웅 (메타 스탯 반영된 정의) */
+  heroDef: HeroDef;
   speed: number;
   running: boolean;
   /** 0~1 — 타워 외관 단계 (프로토타입: 색상 변화) */
@@ -50,7 +52,7 @@ interface Props {
   onFrame?: (engine: BattleEngine, dt: number) => void;
 }
 
-export function BattleField({ config, speed, running, towerPct, onFrame }: Props) {
+export function BattleField({ config, heroDef, speed, running, towerPct, onFrame }: Props) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const engineRef = useRef<BattleEngine | null>(null);
   const [, setFrame] = useState(0);
@@ -66,10 +68,10 @@ export function BattleField({ config, speed, running, towerPct, onFrame }: Props
     if (!size) return;
     const progress = useProgressStore.getState();
     const unitMetaBonuses = progress.getUnitMetaBonuses();
-    const engine = new BattleEngine(config, makeFieldLayout(size.h / size.w), undefined, unitMetaBonuses);
-    engine.heroSkillLevel = progress.getHeroMeta('maruhan').skillLevel; // HEROES[0] — 영웅 선택 도입 시 교체
+    const engine = new BattleEngine(config, makeFieldLayout(size.h / size.w), heroDef, unitMetaBonuses);
+    engine.heroSkillLevel = progress.getHeroMeta(heroDef.id).skillLevel;
     engineRef.current = engine;
-  }, [size, config]);
+  }, [size, config, heroDef]);
 
   useEffect(() => {
     if (!size) return;

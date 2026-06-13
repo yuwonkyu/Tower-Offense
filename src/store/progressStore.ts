@@ -58,6 +58,8 @@ interface ProgressState {
   gold: number;
   diamonds: number;
   unlockedUnits: UnitId[];
+  /** 전투에 출전할 영웅 (기본 'maruhan') */
+  selectedHeroId: string;
 
   // 영웅 메타
   heroExp: Record<string, number>;
@@ -81,6 +83,9 @@ interface ProgressState {
     heroId: string;
     heroExpGained: number;
   }) => void;
+
+  /** 출전 영웅 선택 */
+  selectHero: (heroId: string) => void;
 
   // ── 영웅 메타 ──
   getHeroMeta: (heroId: string) => HeroMetaInfo;
@@ -115,6 +120,7 @@ const INITIAL = {
   gold: 300,     // 초기 금화 (강화 체험용)
   diamonds: 200, // 초기 다이아 (가챠 체험용)
   unlockedUnits: [] as UnitId[],
+  selectedHeroId: 'maruhan',
   heroExp: {} as Record<string, number>,
   heroInvestedStats: {} as Record<string, HeroStatAlloc>,
   heroSkillLevel: {} as Record<string, number>,
@@ -163,6 +169,8 @@ export const useProgressStore = create<ProgressState>()(
           heroExp: addHeroExpMut(s.heroExp, heroId, heroExpGained),
         });
       },
+
+      selectHero: (heroId) => set({ selectedHeroId: heroId }),
 
       // ── 영웅 메타 ──────────────────────────────────────────────────
 
@@ -337,6 +345,7 @@ export const useProgressStore = create<ProgressState>()(
         gold: s.gold,
         diamonds: s.diamonds,
         unlockedUnits: s.unlockedUnits,
+        selectedHeroId: s.selectedHeroId,
         heroExp: s.heroExp,
         heroInvestedStats: s.heroInvestedStats,
         heroSkillLevel: s.heroSkillLevel,

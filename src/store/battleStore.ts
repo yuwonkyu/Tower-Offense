@@ -103,9 +103,9 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   startStage: (stage, difficulty = 'normal') => {
     const config = getStageConfig(stage, difficulty);
-    // 영웅 메타 스탯 적용
+    // 선택 영웅 + 메타 스탯 적용
     const progress = useProgressStore.getState();
-    const baseHero = HEROES[0];
+    const baseHero = HEROES.find((h) => h.id === progress.selectedHeroId) ?? HEROES[0];
     const adjustedStats = progress.getHeroAdjustedStats(
       baseHero.id,
       baseHero.stats as unknown as Record<string, number>,
