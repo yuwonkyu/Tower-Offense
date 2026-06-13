@@ -149,6 +149,9 @@ export interface CombatEntity {
   bleedRate: number; // HP/초
   burnLeft: number;
   burnRate: number; // HP/초
+  // 적 배회 목표 (설계: 성에만 붙지 않고 주변 순찰 — 피드백 4)
+  roamX?: number;
+  roamY?: number;
 }
 
 /** hurt() 등 호출 후 사망 재확인용 — TS narrowing 우회 */
@@ -218,6 +221,9 @@ const HERO_AGGRO = 35;
 const ENEMY_DEFEND_RADIUS = 60;
 /** 적 대기 링: 추격 대상 없으면 타워 주변으로 귀환 */
 const ENEMY_GUARD_RING = 8;
+/** 적 배회 반경 — 추격 대상 없으면 타워 주변 이 범위를 순찰 (성에만 붙지 않게 — 피드백 4) */
+const ENEMY_ROAM_MIN = 16;
+const ENEMY_ROAM_MAX = 52;
 /**
  * 아군 랠리: 이 수 이상 모이면 웨이브로 진군.
  * 폰 피드백 — "모여서 출발"이 어색 → 물량 스트림으로 전환. 대기 없이 즉시 진군(=1),
@@ -272,6 +278,8 @@ export class BattleEngine {
 
   private spawnAcc = 0;
   private allySpawnAcc = 0;
+  /** 아군 포위 생성 각도 누적 — 골든 앵글로 360° 골고루 분산 (피드백 5) */
+  private allySpawnAngle = 0;
   private timeExpAcc = 0;
   private allyWaveReady = false;
   private nextId = 1;
@@ -698,13 +706,9 @@ export class BattleEngine {
       this.allySpawnAcc -= 1;
       if (this.countSide('ally') - 1 >= ALLY_MAX_ALIVE) continue;
       const unitId = unitCards[Math.floor(Math.random() * unitCards.length)];
-      // 영웅 주변 360° 랜덤 생성 (설계 07)
-      const cx = this.hero.state === 'dead' ? this.field.heroX : this.hero.x;
-      const cy = this.hero.state === 'dead' ? this.field.heroY : this.hero.y;
-      const angle = Math.random() * Math.PI * 2;
-      const r = 4 + Math.random() * 4;
-      const x = Math.min(this.field.width - 3, Math.max(3, cx + Math.cos(angle) * r));
-      const y = Math.min(this.field.height - 3, Math.max(3, cy + Math.sin(angle) * r));
+      // 성 포위: 타워 기준 360° 골든 앵글로 화면 가장자리에서 생성 → 사방에서 공성 (피드백 5)
+      this.allySpawnAngle = (this.allySpawnAngle + 2.39996323) % (Math.PI * 2);
+      const { x, y } = this.edgePointFromTower(this.allySpawnAngle);
       this.addEntity(this.makeUnit('ally', unitId, x, y));
     }
   }
@@ -724,6 +728,35 @@ export class BattleEngine {
       if (e.side === side && e.state !== 'dead' && !isStructure(e.kind)) n++;
     }
     return n;
+  }
+
+  /** 적 배회: 타워 주변 [MIN,MAX] 반경의 임의 지점을 순찰, 도달하면 새 지점 (피드백 4) */
+  private roamAroundTower(e: CombatEntity, dt: number) {
+    const { towerX, towerY, width, height } = this.field;
+    const reached =
+      e.roamX === undefined || Math.hypot(e.x - e.roamX, e.y - (e.roamY ?? e.y)) < 3;
+    if (reached) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = ENEMY_ROAM_MIN + Math.random() * (ENEMY_ROAM_MAX - ENEMY_ROAM_MIN);
+      e.roamX = Math.min(width - 3, Math.max(3, towerX + Math.cos(ang) * dist));
+      e.roamY = Math.min(height - 3, Math.max(3, towerY + Math.sin(ang) * dist));
+    }
+    this.moveToward(e, e.roamX!, e.roamY!, 0, dt);
+  }
+
+  /** 타워 기준 angle 방향으로 화면(필드) 가장자리 지점 — 아군 포위 생성용 (피드백 5) */
+  private edgePointFromTower(angle: number): { x: number; y: number } {
+    const { towerX, towerY, width, height } = this.field;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const m = 3;
+    let t = Infinity;
+    if (cos > 1e-6) t = Math.min(t, (width - m - towerX) / cos);
+    else if (cos < -1e-6) t = Math.min(t, (m - towerX) / cos);
+    if (sin > 1e-6) t = Math.min(t, (height - m - towerY) / sin);
+    else if (sin < -1e-6) t = Math.min(t, (m - towerY) / sin);
+    if (!isFinite(t)) t = 0;
+    return { x: towerX + cos * t, y: towerY + sin * t };
   }
 
   // ── 영웅 부활 ─────────────────────────────────────────
@@ -794,9 +827,8 @@ export class BattleEngine {
       } else {
         e.state = 'moving';
         if (e.side === 'enemy') {
-          // 방어 태세 귀환: 추격 대상 없으면 타워 대기 링으로
-          const { towerX, towerY, towerRadius } = this.field;
-          this.moveToward(e, towerX, towerY, towerRadius + ENEMY_GUARD_RING, dt);
+          // 방어 태세 배회: 추격 대상 없으면 타워 주변을 순찰 (성에만 붙지 않게 — 피드백 4)
+          this.roamAroundTower(e, dt);
         }
       }
     }
