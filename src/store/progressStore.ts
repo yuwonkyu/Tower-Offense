@@ -7,14 +7,20 @@ import { BASE_UNITS } from '@/data/units';
 import { NEW_ENEMY_UNITS } from '@/data/enemyUnits';
 import { HEROES } from '@/data/heroes';
 import {
+  bulkGachaCost,
+  GACHA_TIERS,
   heroMetaExpToNext,
   heroMetaLevelFromExp,
   unitUpgradeCardCost,
   unitUpgradeGoldCost,
   unitUpgradeStatBonus,
+  DAILY_GIFT,
+  GOLD_SHOP_PACKS,
+  HERO_GACHA_COST,
   HERO_RESET_DIAMONDS,
   HERO_DUPE_EXP,
   UNIT_GACHA_CARDS,
+  UNIT_GACHA_COST,
 } from '@/game/formulas';
 
 // ── 타입 ─────────────────────────────────────────────────────────────
@@ -60,6 +66,8 @@ interface ProgressState {
   unlockedUnits: UnitId[];
   /** 전투에 출전할 영웅 (기본 'maruhan') */
   selectedHeroId: string;
+  /** 일일 무료 선물 마지막 수령 날짜 (YYYY-MM-DD, '' = 미수령) */
+  dailyGiftDate: string;
 
   // 영웅 메타
   heroExp: Record<string, number>;
@@ -100,9 +108,17 @@ interface ProgressState {
   /** 유닛 메타 레벨 보너스 맵 (엔진 전달용): unitId → 보너스 배수 */
   getUnitMetaBonuses: () => Record<string, number>;
 
-  // ── 가챠 ──
-  pullUnitGacha: () => { unitId: string; count: number; newlyUnlocked: boolean }[];
-  pullHeroGacha: () => { heroId: string; isDupe: boolean; expGained: number };
+  // ── 가챠 (묶음 소환 x1/x10/x100) ──
+  pullUnitGacha: (times?: number) => { unitId: string; count: number; newlyUnlocked: boolean }[];
+  pullHeroGacha: (times?: number) => { heroes: { heroId: string; count: number }[]; totalExp: number };
+
+  // ── 골드 상점 / 일일선물 ──
+  /** 다이아로 골드 구매 (GOLD_SHOP_PACKS 인덱스) */
+  buyGoldPack: (packIndex: number) => boolean;
+  /** 오늘 일일 선물 수령 가능 여부 */
+  canClaimDailyGift: () => boolean;
+  /** 일일 선물 수령 — 이미 받았으면 null */
+  claimDailyGift: () => { gold: number; diamonds: number } | null;
 
   // ── 재화 ──
   addGold: (amount: number) => void;
@@ -121,6 +137,7 @@ const INITIAL = {
   diamonds: 200, // 초기 다이아 (가챠 체험용)
   unlockedUnits: [] as UnitId[],
   selectedHeroId: 'maruhan',
+  dailyGiftDate: '',
   heroExp: {} as Record<string, number>,
   heroInvestedStats: {} as Record<string, HeroStatAlloc>,
   heroSkillLevel: {} as Record<string, number>,
@@ -136,6 +153,11 @@ function addHeroExpMut(
   amount: number,
 ): Record<string, number> {
   return { ...heroExp, [heroId]: (heroExp[heroId] ?? 0) + amount };
+}
+
+/** 오늘 날짜 (YYYY-MM-DD, 로컬) */
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 // ── 스토어 ────────────────────────────────────────────────────────────
@@ -268,12 +290,14 @@ export const useProgressStore = create<ProgressState>()(
 
       // ── 가챠 ───────────────────────────────────────────────────────
 
-      pullUnitGacha: () => {
+      pullUnitGacha: (times = 1) => {
         const s = get();
-        if (s.diamonds < 50) return [];
+        const tier = GACHA_TIERS.find((t) => t.times === times) ?? GACHA_TIERS[0];
+        const cost = bulkGachaCost(UNIT_GACHA_COST, tier.times, tier.discountPct);
+        if (s.diamonds < cost) return [];
 
         const drawn: Record<string, number> = {};
-        for (let i = 0; i < UNIT_GACHA_CARDS; i++) {
+        for (let i = 0; i < UNIT_GACHA_CARDS * tier.times; i++) {
           const id = randomFrom(ALL_UNIT_IDS);
           drawn[id] = (drawn[id] ?? 0) + 1;
         }
@@ -291,28 +315,56 @@ export const useProgressStore = create<ProgressState>()(
         }
 
         set({
-          diamonds: s.diamonds - 50,
+          diamonds: s.diamonds - cost,
           unitCardCounts: newCounts,
           unlockedUnits: [...toUnlock],
         });
         return results;
       },
 
-      pullHeroGacha: () => {
+      pullHeroGacha: (times = 1) => {
         const s = get();
-        if (s.diamonds < 100) return { heroId: '', isDupe: false, expGained: 0 };
+        const tier = GACHA_TIERS.find((t) => t.times === times) ?? GACHA_TIERS[0];
+        const cost = bulkGachaCost(HERO_GACHA_COST, tier.times, tier.discountPct);
+        if (s.diamonds < cost) return { heroes: [], totalExp: 0 };
 
-        const heroId = randomFrom(HERO_IDS);
-        // 모든 영웅이 기본 보유 → 항상 중복 (EXP 지급)
-        // 추후 영웅 잠금 시스템 도입 시 분기 추가
-        const isDupe = true;
-        const expGained = HERO_DUPE_EXP;
+        // 모든 영웅 기본 보유 → 항상 중복 (EXP 지급). 추후 영웅 잠금 시 분기 추가
+        const counts: Record<string, number> = {};
+        let heroExp = s.heroExp;
+        for (let i = 0; i < tier.times; i++) {
+          const heroId = randomFrom(HERO_IDS);
+          counts[heroId] = (counts[heroId] ?? 0) + 1;
+          heroExp = addHeroExpMut(heroExp, heroId, HERO_DUPE_EXP);
+        }
 
+        set({ diamonds: s.diamonds - cost, heroExp });
+        return {
+          heroes: Object.entries(counts).map(([heroId, count]) => ({ heroId, count })),
+          totalExp: tier.times * HERO_DUPE_EXP,
+        };
+      },
+
+      // ── 골드 상점 / 일일선물 ──────────────────────────────────────
+
+      buyGoldPack: (packIndex) => {
+        const s = get();
+        const pack = GOLD_SHOP_PACKS[packIndex];
+        if (!pack || s.diamonds < pack.diamonds) return false;
+        set({ diamonds: s.diamonds - pack.diamonds, gold: s.gold + pack.gold });
+        return true;
+      },
+
+      canClaimDailyGift: () => get().dailyGiftDate !== todayStr(),
+
+      claimDailyGift: () => {
+        const s = get();
+        if (s.dailyGiftDate === todayStr()) return null;
         set({
-          diamonds: s.diamonds - 100,
-          heroExp: addHeroExpMut(s.heroExp, heroId, expGained),
+          gold: s.gold + DAILY_GIFT.gold,
+          diamonds: s.diamonds + DAILY_GIFT.diamonds,
+          dailyGiftDate: todayStr(),
         });
-        return { heroId, isDupe, expGained };
+        return { gold: DAILY_GIFT.gold, diamonds: DAILY_GIFT.diamonds };
       },
 
       // ── 재화 ───────────────────────────────────────────────────────
@@ -346,6 +398,7 @@ export const useProgressStore = create<ProgressState>()(
         diamonds: s.diamonds,
         unlockedUnits: s.unlockedUnits,
         selectedHeroId: s.selectedHeroId,
+        dailyGiftDate: s.dailyGiftDate,
         heroExp: s.heroExp,
         heroInvestedStats: s.heroInvestedStats,
         heroSkillLevel: s.heroSkillLevel,

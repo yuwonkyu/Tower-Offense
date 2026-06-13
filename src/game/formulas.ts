@@ -160,3 +160,25 @@ export const HERO_GACHA_COST = 100;
 export const HERO_DUPE_EXP = 100;
 /** 유닛 가챠 1회 지급 카드 수 */
 export const UNIT_GACHA_CARDS = 10;
+
+/** 묶음 소환 단위 + 묶음 할인 (설계 06 — x10 -5%, x100 -10%) */
+export const GACHA_TIERS = [
+  { times: 1, label: 'x1', discountPct: 0 },
+  { times: 10, label: 'x10', discountPct: 5 },
+  { times: 100, label: 'x100', discountPct: 10 },
+] as const;
+
+/** 묶음 소환 총 비용 (다이아) — floor(기본비용 × 횟수 × (1 - 할인)) */
+export function bulkGachaCost(baseCost: number, times: number, discountPct: number): number {
+  return Math.floor(baseCost * times * (1 - discountPct / 100));
+}
+
+/** 골드 상점: 다이아로 골드 구매 (현금 X). 묶음일수록 보너스 골드↑ */
+export const GOLD_SHOP_PACKS = [
+  { diamonds: 10, gold: 1000, bonusLabel: '' },
+  { diamonds: 50, gold: 5500, bonusLabel: '+10%' },
+  { diamonds: 100, gold: 12000, bonusLabel: '+20%' },
+] as const;
+
+/** 일일 무료 선물 (매일 접속 1회) */
+export const DAILY_GIFT = { gold: 500, diamonds: 10 } as const;

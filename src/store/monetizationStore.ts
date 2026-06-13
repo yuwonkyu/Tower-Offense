@@ -17,15 +17,23 @@ export type AdRewardKind =
   | 'freeDiamonds' // 무료 다이아
   | 'retry'; // 실패 재도전
 
-/** IAP 상품 정의 (가격은 출시 전 확정 — 설계 06) */
+/**
+ * IAP 상품 정의 (가격은 출시 전 확정 — 설계 06).
+ * 다이아 현금팩 x1/x10/x100: 묶음일수록 보너스 다이아↑ (x10 +10%, x100 +20%).
+ * diamonds 값에 보너스가 이미 포함됨 (1,000→1,100 / 10,000→12,000).
+ * 골드는 현금이 아닌 다이아로 구매 (progressStore.buyGoldPack).
+ */
 export const IAP_PRODUCTS = {
-  diamondsSmall: { name: '다이아 200', diamonds: 200, priceLabel: '$1.99' },
-  diamondsLarge: { name: '다이아 1,200', diamonds: 1200, priceLabel: '$9.99' },
-  goldPack: { name: '금화 5,000', gold: 5000, priceLabel: '$2.99' },
-  adFree: { name: '광고 제거 + x4 영구', priceLabel: '$9.99' },
+  diamonds_x1: { name: '다이아 100', diamonds: 100, priceLabel: '$0.99', bonusLabel: '' },
+  diamonds_x10: { name: '다이아 1,100', diamonds: 1100, priceLabel: '$9.99', bonusLabel: '+10% 보너스' },
+  diamonds_x100: { name: '다이아 12,000', diamonds: 12000, priceLabel: '$99.99', bonusLabel: '+20% 보너스' },
+  adFree: { name: '광고 제거 + x4 영구', priceLabel: '$9.99', bonusLabel: '' },
 } as const;
 
 export type IapProductId = keyof typeof IAP_PRODUCTS;
+
+/** 다이아 현금팩 묶음 (UI 표시 순서) */
+export const DIAMOND_PACK_IDS = ['diamonds_x1', 'diamonds_x10', 'diamonds_x100'] as const;
 
 /** 무료 다이아 광고 보상량 */
 export const AD_FREE_DIAMONDS = 20;
@@ -80,14 +88,10 @@ export const useMonetizationStore = create<MonetizationState>()(
         // 스텁: 결제 성공 가정 후 즉시 지급
         const progress = useProgressStore.getState();
         switch (productId) {
-          case 'diamondsSmall':
-            progress.addDiamonds(IAP_PRODUCTS.diamondsSmall.diamonds);
-            return true;
-          case 'diamondsLarge':
-            progress.addDiamonds(IAP_PRODUCTS.diamondsLarge.diamonds);
-            return true;
-          case 'goldPack':
-            progress.addGold(IAP_PRODUCTS.goldPack.gold);
+          case 'diamonds_x1':
+          case 'diamonds_x10':
+          case 'diamonds_x100':
+            progress.addDiamonds(IAP_PRODUCTS[productId].diamonds);
             return true;
           case 'adFree':
             if (get().adFree) return false; // 중복 구매 방지
