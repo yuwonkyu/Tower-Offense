@@ -14,7 +14,12 @@ import { ENEMY_HEROES, MINI_BOSSES, PALADIN_BOSS_EXP } from '@/data/enemyHeroes'
 import { BOMBER_EXPLODED_EXP, NEW_ENEMY_UNITS } from '@/data/enemyUnits';
 import { HEROES } from '@/data/heroes';
 import { STRUCTURE_SPECS, structureCounts, structureHpScale, TRAP_TRIGGER } from '@/data/structures';
-import { damage, expTotalForLevel, expToNextLevel } from '@/game/formulas';
+import {
+  damage,
+  expTotalForLevel,
+  expToNextLevel,
+  HERO_BASE_REGEN_PCT,
+} from '@/game/formulas';
 import { spawnWeightsForStage, type SpawnWeight } from '@/data/spawnWeights';
 import { CardSystem, type UnitMods } from './cards';
 
@@ -200,11 +205,11 @@ export interface Projectile {
 
 /** 적 동시 생존 캡 — 붕괴 구간 동안 무한 적립된 주둔군이 공략 불가가 되는 것 방지 (+모바일 성능) */
 const ENEMY_MAX_ALIVE = 150;
-const ALLY_MAX_ALIVE = 80;
-/** 유닛 카드 보유 시 기본 초당 생성률 — 카드가 점진 획득되는 초반 열세 보정 */
-const ALLY_SPAWN_BASE = 1.0;
+const ALLY_MAX_ALIVE = 110;
+/** 유닛 카드 보유 시 기본 초당 생성률 — 물량 스트림으로 전선 상시 유지 (모여서 출발 대신 연속 젠) */
+const ALLY_SPAWN_BASE = 2.0;
 /** 유닛 카드 1장당 추가 생성률 (설계 07: 카드마다 독립 생성) */
-const ALLY_SPAWN_RATE_PER_CARD = 0.5;
+const ALLY_SPAWN_RATE_PER_CARD = 1.0;
 /** 사거리 + α 안의 적을 탐지 (밖이면 아군은 타워로 진군) */
 const AGGRO_BONUS = 14;
 /** 영웅 탐지 범위 — 근접 영웅도 원거리 포격에 대응하도록 넓게 */
@@ -213,8 +218,12 @@ const HERO_AGGRO = 35;
 const ENEMY_DEFEND_RADIUS = 60;
 /** 적 대기 링: 추격 대상 없으면 타워 주변으로 귀환 */
 const ENEMY_GUARD_RING = 8;
-/** 아군 랠리: 이 수 이상 모이면 웨이브로 진군 — 한 마리씩 적 캠프에 갈리는 것 방지 */
-const ALLY_RALLY_SIZE = 30;
+/**
+ * 아군 랠리: 이 수 이상 모이면 웨이브로 진군.
+ * 폰 피드백 — "모여서 출발"이 어색 → 물량 스트림으로 전환. 대기 없이 즉시 진군(=1),
+ * 손실은 상향된 스폰율(BASE 2.0/카드 1.0)로 보전.
+ */
+const ALLY_RALLY_SIZE = 1;
 /** 원거리 판정 기준 사거리 (암살자/기마병 우선타깃용) */
 const RANGED_THRESHOLD = 10;
 /** 치유사 초당 회복 — 설계상 공격력×0.5인데 기본 공격력 0이라 임시 보정값 사용 */
@@ -435,7 +444,7 @@ export class BattleEngine {
       killExp: 0,
       critChance: 0,
       lifestealPct: 0,
-      regenPctPerSec: 0,
+      regenPctPerSec: HERO_BASE_REGEN_PCT,
       frenzyAtkPct: 0,
       stunLeft: 0,
       projectileSpeed: 0,
@@ -829,8 +838,10 @@ export class BattleEngine {
     if (best) {
       e.targetId = best.id;
     } else if (e.kind === 'hero') {
-      // 영웅은 단독 돌진 금지 — 생성 거점을 지키며 아군과 함께 싸움 (시뮬: 초반 폭사 방지)
-      e.targetId = NO_TARGET;
+      // 폰 피드백: 영웅도 성을 향해 공성 — 탐지(35) 내 적 없으면 진입로 성벽→타워로 진군.
+      // 체력/방어 3배 + 체젠으로 단독 전진 생존성 확보 (기존 폭사 우려 해소)
+      const blocking = this.blockingWall(e);
+      e.targetId = blocking ? blocking.id : TOWER_TARGET;
     } else {
       // 적측 방어 태세 (설계 10): 타워 방어 반경 내 아군만 추격 — 맵 횡단 추격 금지
       const { towerX, towerY } = this.field;
@@ -1336,7 +1347,7 @@ export class BattleEngine {
     h.evade = m.evadePct / 100;
     h.critChance = m.critChance / 100;
     h.lifestealPct = m.lifestealPct / 100;
-    h.regenPctPerSec = m.regenPctPerSec;
+    h.regenPctPerSec = HERO_BASE_REGEN_PCT + m.regenPctPerSec;
     h.frenzyAtkPct = m.frenzyAtkPct;
     // 영웅 프록 (글로벌 카드 — 불굴 등)
     h.dmgReduction = m.dmgReductionPct / 100;

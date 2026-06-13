@@ -104,8 +104,11 @@ export const HARD_MODE = {
 /** 스테이지 제한 시간 (초) — 10분 확정 */
 export const STAGE_TIME_LIMIT = 600;
 
-/** 영웅 부활 시간 (초) */
-export const HERO_REVIVE_SECONDS = 90;
+/** 영웅 부활 시간 (초) — 폰 피드백으로 90→30 단축 */
+export const HERO_REVIVE_SECONDS = 30;
+
+/** 영웅 기본 체력 재생 (초당 최대체력 %) — 폰 피드백으로 추가, 카드 회복과 합산 */
+export const HERO_BASE_REGEN_PCT = 1;
 
 /** 카드 선택 제한 시간 (초) */
 export const CARD_PICK_SECONDS = 30;
