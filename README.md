@@ -260,6 +260,7 @@
 | 14 | [유닛 우선타깃](docs/design/14-targeting-priority.md) | 표적 우선순위 |
 | 15 | [종족 비전](docs/design/15-races-vision.md) | 8종족 로드맵 |
 | 16 | [전투 화면 HUD](docs/design/16-battle-hud.md) | HUD 레이아웃 확정 |
+| 🔄 | [작업 인수인계](docs/design/HANDOFF.md) | 재개 시작점 / 다음 작업 큐 |
 | ✅ | [진행 현황 & 로그](docs/design/PROGRESS.md) | 작업 상태 |
 
 ---
