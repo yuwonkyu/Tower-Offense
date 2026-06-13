@@ -17,8 +17,8 @@ export const HEROES: HeroDef[] = [
     stats: { atk: 30, def: 70, hp: 320, moveSpeed: 6, range: 2, atkSpeed: 1.2, aoe: 2 },
     growth: { atk: 1, def: 2, hp: 8, atkSpeed: 0.02 },
     skill: {
-      name: '투신',
-      description: '1분간 모든 스탯 % 증가 (스탯 강화형)',
+      name: '용맹',
+      description: '1분간 주변 아군 전체 + 자신의 모든 스탯 % 증가 (광역 버프형)',
       ratio: 0.1,
       cooldown: 60,
       duration: 60,

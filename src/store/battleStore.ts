@@ -29,6 +29,10 @@ interface BattleState {
   /** 스킬 남은 쿨타임 (초) */
   skillCooldown: number;
   kills: number;
+  /** 생존 적 유닛 수 (HUD 상단 — 피드백 11) */
+  enemyCount: number;
+  /** 생존 아군 유닛 수 (HUD 하단 — 피드백 11) */
+  allyCount: number;
   /** 영웅 사망 횟수 (정산용) */
   deaths: number;
   /** 결과 확정 시점까지 경과한 게임 내 시간 (초) */
@@ -84,6 +88,8 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   expToNext: expToNextLevel(1),
   skillCooldown: 0,
   kills: 0,
+  enemyCount: 0,
+  allyCount: 0,
   deaths: 0,
   clearTime: 0,
   goldEarned: 0,
@@ -119,6 +125,8 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       expToNext: expToNextLevel(1),
       skillCooldown: 0,
       kills: 0,
+      enemyCount: 0,
+      allyCount: 0,
       deaths: 0,
       clearTime: 0,
       goldEarned: 0,
@@ -207,6 +215,8 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       expToNext: engine.expToNext,
       skillCooldown: engine.heroSkillCd,
       kills: engine.kills,
+      enemyCount: engine.enemyAlive,
+      allyCount: engine.allyAlive,
       deaths: s.deaths + deathDelta,
       reviveLeft: newRevive,
       goldEarned,

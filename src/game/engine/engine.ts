@@ -144,6 +144,10 @@ export interface CombatEntity {
   undyingCdMax: number;
   /** 불굴 남은 쿨타임 */
   undyingCd: number;
+  /** 용맹(마루한 스킬) 버프 남은 시간 (0 = 미적용) */
+  buffLeft: number;
+  /** 용맹 버프 적용 % (해제 시 되돌리기용) */
+  buffPct: number;
   // 상태이상 런타임 (피격측)
   bleedLeft: number;
   bleedRate: number; // HP/초
@@ -176,6 +180,8 @@ function zeroProcFields() {
     stunOnHit: 0,
     undyingCdMax: 0,
     undyingCd: 0,
+    buffLeft: 0,
+    buffPct: 0,
     bleedLeft: 0,
     bleedRate: 0,
     burnLeft: 0,
@@ -248,6 +254,8 @@ const TAUNT_RADIUS = 6;
 const PIERCE_RADIUS = 3.5;
 /** 돌진: 교전 접근 이동 속도 배수 */
 const CHARGE_MOVE_MULT = 1.3;
+/** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 7) */
+const VALOR_RADIUS = 34;
 
 export type EngineResult = 'ongoing' | 'victory';
 
@@ -360,10 +368,13 @@ export class BattleEngine {
     const ratio = skill.ratio * (1 + (this.heroSkillLevel - 1) * 0.02);
 
     if (this.heroDef.id === 'maruhan') {
-      // 투신: 스탯 버프 (타깃 불필요)
-      this.heroBuffPct = ratio * 100;
-      this.heroSkillBuffLeft = skill.duration ?? 60;
+      // 용맹: 자신 + 주변 아군 전체 스탯 버프 (피드백 7 — 광역 버프형)
+      const duration = skill.duration ?? 60;
+      const pct = ratio * 100;
+      this.heroBuffPct = pct;
+      this.heroSkillBuffLeft = duration;
       this.refreshHeroStats();
+      this.applyValorBuff(pct, duration);
     } else {
       // 타깃 지점: 영웅 주변 가장 가까운 적 (없으면 발동 보류)
       const h = this.hero;
@@ -398,6 +409,43 @@ export class BattleEngine {
 
     this.heroSkillCd = skill.cooldown * (1 - this.cards.cdrPct / 100);
     return true;
+  }
+
+  /** 용맹: 반경 내 아군 유닛(영웅 제외 — 영웅은 heroBuffPct로 처리)에 스탯 % 버프 */
+  private applyValorBuff(pct: number, duration: number) {
+    const h = this.hero;
+    for (const e of this.entities) {
+      if (e.side !== 'ally' || e.kind === 'hero' || e.state === 'dead') continue;
+      if (isStructure(e.kind)) continue;
+      if (Math.hypot(e.x - h.x, e.y - h.y) > VALOR_RADIUS) continue;
+      if (e.buffLeft > 0) this.removeValorBuff(e); // 재시전 — 기존 버프 갱신
+      const f = 1 + pct / 100;
+      const ratio = e.maxHp > 0 ? e.hp / e.maxHp : 1;
+      e.atk *= f;
+      e.def *= f;
+      e.maxHp *= f;
+      e.hp = e.maxHp * ratio;
+      e.atkSpeed *= f;
+      e.moveSpeed *= f;
+      e.range *= f;
+      e.buffPct = pct;
+      e.buffLeft = duration;
+    }
+  }
+
+  /** 용맹 버프 해제 — 적용 % 만큼 되돌림 (HP 비율 유지) */
+  private removeValorBuff(e: CombatEntity) {
+    const f = 1 + e.buffPct / 100;
+    const ratio = e.maxHp > 0 ? e.hp / e.maxHp : 1;
+    e.atk /= f;
+    e.def /= f;
+    e.maxHp /= f;
+    e.hp = e.maxHp * ratio;
+    e.atkSpeed /= f;
+    e.moveSpeed /= f;
+    e.range /= f;
+    e.buffPct = 0;
+    e.buffLeft = 0;
   }
 
   /** dt = 게임 시간 기준 경과 초 (배속 적용 후) */
@@ -783,6 +831,11 @@ export class BattleEngine {
       if (e.state === 'dead') continue;
       if (isStructure(e.kind)) continue; // 구조물은 행동 없음 (트랩은 updateTraps)
 
+      // 용맹 버프 만료 — 적용분 되돌림 (기절 중에도 진행)
+      if (e.buffLeft > 0) {
+        e.buffLeft -= dt;
+        if (e.buffLeft <= 0) this.removeValorBuff(e);
+      }
       // 상태이상 틱: 출혈/화상 DoT + 불굴 쿨다운 (기절 중에도 진행)
       if (e.undyingCd > 0) e.undyingCd -= dt;
       if (e.bleedLeft > 0) {
@@ -1473,6 +1526,16 @@ export class BattleEngine {
   }
 
   // ── HUD 조회용 ────────────────────────────────────────
+
+  /** 생존 적 유닛 수 (구조물 제외) — HUD 상단 표시 (피드백 11) */
+  get enemyAlive(): number {
+    return this.countSide('enemy');
+  }
+
+  /** 생존 아군 유닛 수 (영웅·구조물 제외) — HUD 하단 표시 (피드백 11) */
+  get allyAlive(): number {
+    return this.countSide('ally') - (this.hero.state !== 'dead' ? 1 : 0);
+  }
 
   get expInLevel(): number {
     return this.totalExp - expTotalForLevel(this.level);

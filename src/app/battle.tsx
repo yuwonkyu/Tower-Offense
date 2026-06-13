@@ -1,14 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AdStubModal } from '@/components/AdStubModal';
 import { BattleField } from '@/components/BattleField';
 import { CardPickModal } from '@/components/CardPickModal';
+import { PauseMenuModal } from '@/components/PauseMenuModal';
 import { StageResultModal } from '@/components/StageResultModal';
 import { Colors } from '@/constants/theme';
 import { cardById } from '@/data/cards';
 import { ENEMY_HEROES } from '@/data/enemyHeroes';
+import type { EnemyHeroId } from '@/game/types';
 import type { BattleEngine } from '@/game/engine/engine';
 import { CARD_PICK_SECONDS, heroMetaExpForStage } from '@/game/formulas';
 import { useBattleStore } from '@/store/battleStore';
@@ -17,6 +19,13 @@ import { useMonetizationStore } from '@/store/monetizationStore';
 import { TOTAL_STAGES } from '@/data/stages';
 
 const CARD_SLOTS = 8;
+
+/** 적 영웅 종족별 시각 구분 (피드백 6 — 10/20/30 보스 구분) */
+const ENEMY_HERO_VISUAL: Record<EnemyHeroId, { icon: string; color: string; tag: string }> = {
+  knight: { icon: '⚔️', color: '#e8c468', tag: '정통파' },
+  mage: { icon: '🔮', color: '#b06fe8', tag: '광역 마법' },
+  paladin: { icon: '👑', color: '#ffd700', tag: '엔드 보스' },
+};
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -41,6 +50,8 @@ export default function BattleScreen() {
   const expToNext = useBattleStore((s) => s.expToNext);
   const skillCooldown = useBattleStore((s) => s.skillCooldown);
   const kills = useBattleStore((s) => s.kills);
+  const enemyCount = useBattleStore((s) => s.enemyCount);
+  const allyCount = useBattleStore((s) => s.allyCount);
   const deaths = useBattleStore((s) => s.deaths);
   const clearTime = useBattleStore((s) => s.clearTime);
   const goldEarned = useBattleStore((s) => s.goldEarned);
@@ -65,6 +76,16 @@ export default function BattleScreen() {
   const [adKind, setAdKind] = useState<
     'doubleReward' | 'cardReroll' | 'speedX4' | 'retry' | null
   >(null);
+
+  /** 일시정지 메뉴 (설정 버튼 — 피드백 10) */
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  /**
+   * 일시정지 게이트: 광고/메뉴 중에는 게임 루프(틱·카드 선택 타이머)를 멈춤.
+   * handleFrame이 useCallback([])이라 최신 값을 ref로 읽음 (피드백 8·9).
+   */
+  const pausedRef = useRef(false);
+  pausedRef.current = adKind !== null || menuOpen;
 
   const retryStage = () => {
     router.replace({ pathname: '/battle', params: { stage: stageNum } });
@@ -121,6 +142,8 @@ export default function BattleScreen() {
 
   // 게임 루프 (BattleField rAF)에서 매 프레임 호출
   const handleFrame = useCallback((engine: BattleEngine, dt: number) => {
+    // 광고/일시정지 메뉴 중에는 틱·카드 선택 타이머 정지 (피드백 8·9)
+    if (pausedRef.current) return;
     const store = useBattleStore.getState();
     store.tick(dt);
     store.syncFromEngine(engine);
@@ -129,6 +152,7 @@ export default function BattleScreen() {
   if (!config) return <View style={styles.container} />;
 
   const enemyHero = ENEMY_HEROES.find((h) => h.id === config.enemyHero)!;
+  const heroVisual = ENEMY_HERO_VISUAL[config.enemyHero];
   const towerPct = towerHp / config.tower.hp;
   const heroPct = heroMaxHp > 0 ? heroHp / heroMaxHp : 0;
   const expPct = expToNext > 0 ? exp / expToNext : 0;
@@ -137,26 +161,44 @@ export default function BattleScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* ── 상단 바: 적 영웅 이름 / 적 HP / 설정 ── */}
+      {/* ── 상단 바: 적 영웅(종족 구분) / 적 HP / 설정 ── */}
       <View style={styles.topBar}>
+        {/* 적 영웅 엠블럼 — 스테이지대별 색/아이콘 구분 (피드백 6) */}
+        <View style={[styles.enemyEmblem, { borderColor: heroVisual.color }]}>
+          <Text style={styles.enemyEmblemIcon}>{heroVisual.icon}</Text>
+        </View>
         <View style={styles.topLeft}>
           <View style={styles.topRow}>
-            <Text style={styles.enemyName}>{enemyHero.name}</Text>
+            <View style={styles.enemyNameWrap}>
+              <Text style={[styles.enemyName, { color: heroVisual.color }]}>{enemyHero.name}</Text>
+              <View style={[styles.enemyTag, { borderColor: heroVisual.color }]}>
+                <Text style={[styles.enemyTagText, { color: heroVisual.color }]}>
+                  {heroVisual.tag}
+                </Text>
+              </View>
+            </View>
             <Text style={styles.enemyHpText}>
               {Math.ceil(towerHp).toLocaleString()} / {config.tower.hp.toLocaleString()}
             </Text>
           </View>
           <View style={styles.enemyHpBar}>
-            <View style={[styles.enemyHpFill, { width: `${towerPct * 100}%` }]} />
+            <View
+              style={[styles.enemyHpFill, { width: `${towerPct * 100}%`, backgroundColor: heroVisual.color }]}
+            />
           </View>
         </View>
-        <Pressable style={styles.settingsBtn} onPress={() => router.back()}>
+        <Pressable style={styles.settingsBtn} onPress={() => setMenuOpen(true)}>
           <Text style={styles.settingsIcon}>⚙</Text>
         </Pressable>
       </View>
 
       {/* ── 전투 필드 ── */}
       <View style={styles.field}>
+        {/* 좌상단: 생존 적 유닛 수 (피드백 11) */}
+        <View style={[styles.countChip, styles.enemyCountChip]}>
+          <Text style={[styles.countText, styles.enemyCountText]}>적 {enemyCount}</Text>
+        </View>
+
         {/* 우상단: 시간 + 배속 */}
         <View style={styles.fieldTopRight}>
           <View style={styles.timerChip}>
@@ -171,13 +213,18 @@ export default function BattleScreen() {
         <BattleField
           config={config}
           speed={speed}
-          running={phase === 'running'}
+          running={phase === 'running' && adKind === null && !menuOpen}
           towerPct={towerPct}
           onFrame={handleFrame}
         />
         <Text style={styles.stageLabel}>
           스테이지 {config.stage} · 처치 {kills}
         </Text>
+
+        {/* 우하단: 생존 아군 유닛 수 (피드백 11) */}
+        <View style={[styles.countChip, styles.allyCountChip]}>
+          <Text style={[styles.countText, styles.allyCountText]}>아군 {allyCount}</Text>
+        </View>
 
         {/* 페이즈 오버레이 — 정산 모달로 대체 */}
       </View>
@@ -302,6 +349,22 @@ export default function BattleScreen() {
         />
       )}
 
+      {/* ── 일시정지 메뉴 (설정 버튼 — 게임 정지 + 보유 카드 수치, 피드백 10) ── */}
+      {menuOpen && (
+        <PauseMenuModal
+          pickedCards={pickedCards}
+          onResume={() => setMenuOpen(false)}
+          onRetry={() => {
+            setMenuOpen(false);
+            retryStage();
+          }}
+          onExit={() => {
+            setMenuOpen(false);
+            router.back();
+          }}
+        />
+      )}
+
       {/* ── 광고 스텁 (설계 06 IAA — x4 / 카드 재선택 / 보상 2배) ── */}
       <AdStubModal
         visible={adKind !== null}
@@ -325,7 +388,25 @@ const styles = StyleSheet.create({
   },
   topLeft: { flex: 1, gap: 4 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  enemyName: { fontSize: 13, fontWeight: '600', color: Colors.textMain },
+  enemyEmblem: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  enemyEmblemIcon: { fontSize: 18 },
+  enemyNameWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  enemyName: { fontSize: 14, fontWeight: '700' },
+  enemyTag: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  enemyTagText: { fontSize: 9, fontWeight: '700' },
   enemyHpText: { fontSize: 11, color: Colors.enemyHp },
   enemyHpBar: {
     height: 10,
@@ -380,6 +461,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textDim,
   },
+  countChip: {
+    position: 'absolute',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    zIndex: 2,
+  },
+  enemyCountChip: {
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(220,70,70,0.14)',
+    borderColor: 'rgba(220,70,70,0.4)',
+  },
+  allyCountChip: {
+    bottom: 8,
+    right: 10,
+    backgroundColor: 'rgba(100,180,255,0.14)',
+    borderColor: 'rgba(100,180,255,0.45)',
+  },
+  countText: { fontSize: 12, fontWeight: '700' },
+  enemyCountText: { color: 'rgba(255,120,120,0.95)' },
+  allyCountText: { color: 'rgba(140,200,255,0.95)' },
 
   bottomPanel: {
     backgroundColor: Colors.panel,
