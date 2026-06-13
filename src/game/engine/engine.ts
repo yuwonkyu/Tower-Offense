@@ -328,13 +328,14 @@ export class BattleEngine {
     readonly field: FieldLayout,
     heroDef: HeroDef = HEROES[0],
     unitMetaBonuses: Record<string, number> = {},
+    unlockedUnits: UnitId[] = [],
   ) {
     this.unitMetaBonus = new Map(Object.entries(unitMetaBonuses));
     this.weights = spawnWeightsForStage(config.stage, config.enemyUnits);
     this.totalWeight = this.weights.reduce((sum, w) => sum + w.weight, 0);
     this.heroDef = heroDef;
     this.towerHp = config.tower.hp;
-    this.cards = new CardSystem(config.difficulty === 'hard');
+    this.cards = new CardSystem(config.difficulty === 'hard', new Set(unlockedUnits));
     this.hero = this.makeHero();
     this.addEntity(this.hero);
 
@@ -572,7 +573,8 @@ export class BattleEngine {
       killExp: def.exp,
       critChance: (m?.critChance ?? 0) / 100,
       lifestealPct: (m?.lifestealPct ?? 0) / 100,
-      regenPctPerSec: m?.regenPctPerSec ?? 0,
+      // 내재 체젠(근접병) + 카드 보정 합산
+      regenPctPerSec: (def.regenPctPerSec ?? 0) + (m?.regenPctPerSec ?? 0),
       frenzyAtkPct: m?.frenzyAtkPct ?? 0,
       stunLeft: 0,
       projectileSpeed: def.projectileSpeed ?? 0,

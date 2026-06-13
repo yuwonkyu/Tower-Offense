@@ -9,7 +9,9 @@ export const BASE_UNITS: UnitDef[] = [
     id: 'shield',
     name: '방패병',
     concept: '근접 탱커',
-    stats: { atk: 2, def: 40, hp: 60, moveSpeed: 3.5, range: 1, atkSpeed: 0.6, aoe: 1 },
+    // 근접 유지력↑ (피드백): hp 60→78, def 40→46, 내재 체젠 1%/s (아군·적 공통)
+    stats: { atk: 2, def: 46, hp: 78, moveSpeed: 3.5, range: 1, atkSpeed: 0.6, aoe: 1 },
+    regenPctPerSec: 1,
     priority: 'nearest',
     exp: 2,
     unlockStage: 0,
@@ -52,7 +54,9 @@ export const BASE_UNITS: UnitDef[] = [
     id: 'swordsman',
     name: '검사',
     concept: '근거리 딜러',
-    stats: { atk: 20, def: 25, hp: 50, moveSpeed: 5, range: 1.5, atkSpeed: 1, aoe: 1 },
+    // 근접 유지력↑ (피드백): hp 50→62, def 25→30, 내재 체젠 0.8%/s (아군·적 공통)
+    stats: { atk: 20, def: 30, hp: 62, moveSpeed: 5, range: 1.5, atkSpeed: 1, aoe: 1 },
+    regenPctPerSec: 0.8,
     priority: 'nearest',
     exp: 2,
     unlockStage: 0,

@@ -1,4 +1,11 @@
-import { ALL_CARDS, CARD_MAX_LEVEL, cardById, GLOBAL_CARDS, unitCardByUnit } from '@/data/cards';
+import {
+  ALL_CARDS,
+  CARD_MAX_LEVEL,
+  cardById,
+  GLOBAL_CARDS,
+  REQUIRES_UNLOCK,
+  unitCardByUnit,
+} from '@/data/cards';
 import type { CardDef, UnitId } from '@/game/types';
 
 export const CARD_SLOTS = 8;
@@ -142,7 +149,11 @@ export class CardSystem {
   /** cardId → 보유 레벨 */
   readonly owned = new Map<string, number>();
 
-  constructor(private readonly hard = false) {}
+  constructor(
+    private readonly hard = false,
+    /** 전투 카드 풀에 등장 허용된 해금 유닛 (기본 5종은 항상 허용) */
+    private readonly unlockedUnits: ReadonlySet<string> = new Set(),
+  ) {}
 
   level(cardId: string): number {
     return this.owned.get(cardId) ?? 0;
@@ -174,6 +185,10 @@ export class CardSystem {
     const lv = this.level(card.id);
     if (lv >= this.maxLevelOf(card)) return false;
     if (this.slotsFull && lv === 0) return false; // 슬롯 풀 → 강화만
+    // 해금 필요 유닛(신규 7종)은 미해금 시 풀에서 제외
+    if (card.unitId && REQUIRES_UNLOCK.has(card.unitId) && !this.unlockedUnits.has(card.unitId)) {
+      return false;
+    }
     return true;
   }
 

@@ -81,6 +81,53 @@ export const UNIT_CARDS: CardDef[] = [
   },
 ];
 
+/**
+ * 해금형 유닛 카드 7종 (신규 적 유닛 = 가챠/스테이지로 해금 시 전투 카드 풀 등장).
+ * 특수기술 없이 Lv2~5 스탯업 트랙만 (특수기술은 기본 5종 전용 — 추후 설계).
+ */
+const EXTRA_LEVEL_NAMES = ['생성', '강화 I', '강화 II', '강화 III', '강화 IV (MAX)'];
+
+export const EXTRA_UNIT_CARDS: CardDef[] = [
+  {
+    id: 'unit_mageLow', kind: 'unit', rarity: 'common', name: '하급 마법사', unitId: 'mageLow',
+    description: '단일 원거리 마법 — 매직미사일', levelNames: EXTRA_LEVEL_NAMES,
+    levels: [{}, { atkPct: 12, atkSpeedPct: 10 }, { atkPct: 24, atkSpeedPct: 20 }, { atkPct: 36, atkSpeedPct: 30 }, { atkPct: 50, atkSpeedPct: 40 }],
+  },
+  {
+    id: 'unit_mageMid', kind: 'unit', rarity: 'common', name: '중급 마법사', unitId: 'mageMid',
+    description: '소형 광역 마법 — 매직볼', levelNames: EXTRA_LEVEL_NAMES,
+    levels: [{}, { atkPct: 12, aoePct: 10 }, { atkPct: 24, aoePct: 18 }, { atkPct: 36, aoePct: 26 }, { atkPct: 50, aoePct: 34 }],
+  },
+  {
+    id: 'unit_mageHigh', kind: 'unit', rarity: 'rare', name: '상급 마법사', unitId: 'mageHigh',
+    description: '체인 라이트닝 — 고화력 원거리', levelNames: EXTRA_LEVEL_NAMES,
+    levels: [{}, { atkPct: 14, atkSpeedPct: 10 }, { atkPct: 28, atkSpeedPct: 20 }, { atkPct: 42, atkSpeedPct: 30 }, { atkPct: 58, atkSpeedPct: 42 }],
+  },
+  {
+    id: 'unit_assassin', kind: 'unit', rarity: 'rare', name: '암살자', unitId: 'assassin',
+    description: '원거리 사냥꾼 — 회피/기동', levelNames: EXTRA_LEVEL_NAMES,
+    levels: [{}, { atkPct: 14, evadePct: 8 }, { atkPct: 28, evadePct: 14, moveSpeedPct: 10 }, { atkPct: 42, evadePct: 20, moveSpeedPct: 15 }, { atkPct: 58, evadePct: 26, moveSpeedPct: 20 }],
+  },
+  {
+    id: 'unit_bomber', kind: 'unit', rarity: 'rare', name: '폭탄병', unitId: 'bomber',
+    description: '자폭 광역 — 밀집 처리', levelNames: EXTRA_LEVEL_NAMES,
+    levels: [{}, { atkPct: 14, aoePct: 10 }, { atkPct: 28, aoePct: 18 }, { atkPct: 42, aoePct: 26 }, { atkPct: 60, aoePct: 34 }],
+  },
+  {
+    id: 'unit_healer', kind: 'unit', rarity: 'rare', name: '치유사', unitId: 'healer',
+    description: '아군 회복 지원 — 유지력', levelNames: EXTRA_LEVEL_NAMES,
+    levels: [{}, { hpPct: 14, defPct: 10 }, { hpPct: 26, defPct: 18 }, { hpPct: 38, defPct: 26 }, { hpPct: 52, defPct: 34 }],
+  },
+  {
+    id: 'unit_cavalry', kind: 'unit', rarity: 'rare', name: '기마병', unitId: 'cavalry',
+    description: '고속 기동 — 원거리 위협', levelNames: EXTRA_LEVEL_NAMES,
+    levels: [{}, { atkPct: 12, hpPct: 10 }, { atkPct: 24, hpPct: 18, moveSpeedPct: 8 }, { atkPct: 36, hpPct: 26, moveSpeedPct: 14 }, { atkPct: 50, hpPct: 34, moveSpeedPct: 20 }],
+  },
+];
+
+/** 전투 카드 풀 등장에 해금이 필요한 유닛 (신규 7종) */
+export const REQUIRES_UNLOCK = new Set<string>(EXTRA_UNIT_CARDS.map((c) => c.unitId!));
+
 const pct = (key: string, values: number[]) => values.map((v) => ({ [key]: v }));
 
 /** 글로벌 버프 카드 17장 (일반 10 + 고급 7) — 설계 05 */
@@ -105,12 +152,14 @@ export const GLOBAL_CARDS: CardDef[] = [
   { id: 'g_revive', kind: 'global', rarity: 'rare', name: '영웅 부활 시간 감소', description: '영웅 부활 대기 시간 감소', levels: pct('reviveCdrPct', [10, 18, 26, 34, 42]) },
 ];
 
-export const ALL_CARDS: CardDef[] = [...UNIT_CARDS, ...GLOBAL_CARDS];
+export const ALL_CARDS: CardDef[] = [...UNIT_CARDS, ...EXTRA_UNIT_CARDS, ...GLOBAL_CARDS];
 
 export const CARD_MAX_LEVEL = 5;
 
-/** 유닛 ID → 유닛 카드 (Lv트랙 mods 조회용) */
-const UNIT_CARD_BY_UNIT = new Map(UNIT_CARDS.map((c) => [c.unitId!, c]));
+/** 유닛 ID → 유닛 카드 (Lv트랙 mods 조회용) — 기본 5종 + 해금 7종 */
+const UNIT_CARD_BY_UNIT = new Map(
+  [...UNIT_CARDS, ...EXTRA_UNIT_CARDS].map((c) => [c.unitId!, c]),
+);
 
 export function unitCardByUnit(unitId: string): CardDef | undefined {
   return UNIT_CARD_BY_UNIT.get(unitId as never);

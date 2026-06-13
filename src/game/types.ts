@@ -59,6 +59,8 @@ export interface UnitDef {
    * 미설정 = 즉시 명중 (히트스캔)
    */
   projectileSpeed?: number;
+  /** 내재 체력 재생 — 초당 최대 체력 % (근접병 유지력, 카드 보정과 합산). 미설정 = 0 */
+  regenPctPerSec?: number;
   special?: string;
 }
 

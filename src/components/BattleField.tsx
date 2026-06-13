@@ -68,7 +68,13 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
     if (!size) return;
     const progress = useProgressStore.getState();
     const unitMetaBonuses = progress.getUnitMetaBonuses();
-    const engine = new BattleEngine(config, makeFieldLayout(size.h / size.w), heroDef, unitMetaBonuses);
+    const engine = new BattleEngine(
+      config,
+      makeFieldLayout(size.h / size.w),
+      heroDef,
+      unitMetaBonuses,
+      progress.unlockedUnits,
+    );
     engine.heroSkillLevel = progress.getHeroMeta(heroDef.id).skillLevel;
     engineRef.current = engine;
   }, [size, config, heroDef]);
