@@ -117,8 +117,10 @@ export interface CardDef {
   description: string;
   /** trait 카드의 대상 유닛 */
   unitId?: UnitId;
-  /** Lv1~Lv5 효과. unit 카드는 빈 배열 (뽑는 즉시 유닛 생성 시작) */
+  /** Lv1~Lv5 효과 (각 레벨 = 그 레벨에서 활성화되는 누적 보정치 전체). unit 카드도 Lv트랙 사용 */
   levels: CardLevelEffect[];
+  /** 유닛 Lv트랙 각 레벨 이름 (Lv1~Lv5) — CardPickModal 표시용 */
+  levelNames?: string[];
   /** 타워/구조물 미적용 여부 (출혈/화염 등 % 피해형) */
   excludesTower?: boolean;
 }

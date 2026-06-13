@@ -81,25 +81,26 @@ export function CardPickModal({
                 {card.description}
               </Text>
 
-              {card.kind === 'unit' ? (
-                <Text style={styles.unitNote}>생성 시작</Text>
-              ) : (
-                <View style={styles.levelDots}>
-                  {Array.from({ length: CARD_MAX_LEVEL }, (_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.dot,
-                        i < curLv && styles.dotOwned,
-                        i === nextLv - 1 && styles.dotNext,
-                      ]}
-                    />
-                  ))}
-                  <Text style={styles.levelText}>
-                    {curLv > 0 ? `Lv.${curLv} → ${nextLv}` : `Lv.${nextLv}`}
-                    {nextLv >= CARD_MAX_LEVEL ? ' MAX' : ''}
-                  </Text>
-                </View>
+              <View style={styles.levelDots}>
+                {Array.from({ length: CARD_MAX_LEVEL }, (_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      i < curLv && styles.dotOwned,
+                      i === nextLv - 1 && styles.dotNext,
+                    ]}
+                  />
+                ))}
+                <Text style={styles.levelText}>
+                  {curLv > 0 ? `Lv.${curLv} → ${nextLv}` : `Lv.${nextLv}`}
+                  {nextLv >= CARD_MAX_LEVEL ? ' MAX' : ''}
+                </Text>
+              </View>
+              {card.kind === 'unit' && card.levelNames && (
+                <Text style={styles.unitNote}>
+                  ▸ {card.levelNames[Math.min(nextLv, CARD_MAX_LEVEL) - 1]}
+                </Text>
               )}
             </Pressable>
           );

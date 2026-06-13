@@ -1,58 +1,87 @@
 import type { CardDef } from '@/game/types';
 
 /**
- * 인게임 카드 풀 (설계 04, 05, 07).
- * - 슬롯 8개 (유닛 + 특성 + 글로벌 통합)
- * - 같은 카드 5회 = Lv5 MAX (골드 프레임 + 추가 선택권 1회)
- * - 미보유 유닛의 특성 카드는 풀에서 자동 제외
- * - 중첩: 유닛 특성 + 글로벌 = 단순 합산 (additive)
+ * 인게임 카드 풀 (설계 04, 05, 07 + 카드 개편).
+ * - 슬롯 8개 (유닛 Lv트랙 + 글로벌 통합)
+ * - 유닛 카드 = Lv1→Lv5 업그레이드 트랙 (특성 흡수):
+ *   Lv1 생성 / Lv2·Lv4 스탯업 / Lv3·Lv5 특수기술 (Lv5 = MAX, 추가 선택권 1회)
+ * - 각 레벨 효과 = 그 레벨에서 활성화되는 누적 보정치 전체 (현재 레벨 1개만 적용)
+ * - 글로벌 카드 = Lv1~Lv5 누적 강화
+ * - 중첩: 유닛 트랙 + 글로벌 = 단순 합산 (additive)
  * - 출혈/화염 등 % 피해형은 타워/구조물 미적용
  */
 
-/** 유닛 카드 5장 — 뽑으면 해당 유닛이 영웅 주변 360° 랜덤 생성 시작 */
+/**
+ * 유닛 카드 5종 — Lv1 뽑으면 생성 시작, 같은 카드 반복 시 Lv5까지 강화.
+ * 특수기술 매핑: 방패 도발/수호오라 · 활 불화살/멀티샷 · 창 돌진/출혈 · 투석 화염/기절 · 검 흡혈/버서커
+ */
 export const UNIT_CARDS: CardDef[] = [
-  { id: 'unit_shield', kind: 'unit', rarity: 'common', name: '방패병', description: '방패병 생성 시작', unitId: 'shield', levels: [] },
-  { id: 'unit_archer', kind: 'unit', rarity: 'common', name: '활병', description: '활병 생성 시작', unitId: 'archer', levels: [] },
-  { id: 'unit_spear', kind: 'unit', rarity: 'common', name: '창병', description: '창병 생성 시작', unitId: 'spear', levels: [] },
-  { id: 'unit_catapult', kind: 'unit', rarity: 'common', name: '투석기', description: '투석기 생성 시작', unitId: 'catapult', levels: [] },
-  { id: 'unit_swordsman', kind: 'unit', rarity: 'common', name: '검사', description: '검사 생성 시작', unitId: 'swordsman', levels: [] },
+  {
+    id: 'unit_shield', kind: 'unit', rarity: 'common', name: '방패병', unitId: 'shield',
+    description: '근접 탱커 — 받쳐주는 전선 유지',
+    levelNames: ['생성', '체·방 강화', '도발', '체·방 강화 II', '수호 오라'],
+    levels: [
+      {},
+      { hpPct: 16, defPct: 16 },
+      { hpPct: 16, defPct: 16, tauntChance: 30 },
+      { hpPct: 32, defPct: 32, tauntChance: 30 },
+      { hpPct: 32, defPct: 32, tauntChance: 30, auraDmgReductionPct: 15 },
+    ],
+  },
+  {
+    id: 'unit_archer', kind: 'unit', rarity: 'common', name: '활병', unitId: 'archer',
+    description: '원거리 딜러 — 후방 화력',
+    levelNames: ['생성', '공·공속 강화', '불화살', '공·공속 강화 II', '멀티샷'],
+    excludesTower: true,
+    levels: [
+      {},
+      { atkPct: 16, atkSpeedPct: 12 },
+      { atkPct: 16, atkSpeedPct: 12, chance: 50, bonusDmgPct: 130 },
+      { atkPct: 32, atkSpeedPct: 24, chance: 50, bonusDmgPct: 130 },
+      { atkPct: 32, atkSpeedPct: 24, chance: 50, bonusDmgPct: 130, multishot: 1 },
+    ],
+  },
+  {
+    id: 'unit_spear', kind: 'unit', rarity: 'common', name: '창병', unitId: 'spear',
+    description: '중근거리 — 돌진/출혈 압박',
+    levelNames: ['생성', '공·체 강화', '돌진', '공·체 강화 II', '출혈'],
+    excludesTower: true,
+    levels: [
+      {},
+      { atkPct: 16, hpPct: 12 },
+      { atkPct: 16, hpPct: 12, chargeDmgPct: 15 },
+      { atkPct: 32, hpPct: 24, chargeDmgPct: 15 },
+      { atkPct: 32, hpPct: 24, chargeDmgPct: 15, chance: 30, dotPct: 5 },
+    ],
+  },
+  {
+    id: 'unit_catapult', kind: 'unit', rarity: 'common', name: '투석기', unitId: 'catapult',
+    description: '광역 공성 — 구조물/밀집 강함',
+    levelNames: ['생성', '공·범위 강화', '화염 공격', '공·범위 강화 II', '기절'],
+    excludesTower: true,
+    levels: [
+      {},
+      { atkPct: 16, aoePct: 14 },
+      { atkPct: 16, aoePct: 14, chance: 35, burnPct: 2 },
+      { atkPct: 32, aoePct: 26, chance: 35, burnPct: 2 },
+      { atkPct: 32, aoePct: 26, chance: 35, burnPct: 2, stunSec: 0.8 },
+    ],
+  },
+  {
+    id: 'unit_swordsman', kind: 'unit', rarity: 'common', name: '검사', unitId: 'swordsman',
+    description: '근거리 딜러 — 흡혈/버서커 폭딜',
+    levelNames: ['생성', '공·체 강화', '흡혈', '공·체 강화 II', '버서커'],
+    levels: [
+      {},
+      { atkPct: 16, hpPct: 12 },
+      { atkPct: 16, hpPct: 12, lifestealPct: 10 },
+      { atkPct: 32, hpPct: 24, lifestealPct: 10 },
+      { atkPct: 80, hpPct: 24, lifestealPct: 10, defPct: -60, atkSpeedPct: 40, moveSpeedPct: 30 },
+    ],
+  },
 ];
 
 const pct = (key: string, values: number[]) => values.map((v) => ({ [key]: v }));
-
-/** 유닛 특성 카드 25장 (5유닛 × 5) — 설계 04 */
-export const TRAIT_CARDS: CardDef[] = [
-  // 방패병 (탱커)
-  { id: 'shield_hp', kind: 'trait', rarity: 'common', unitId: 'shield', name: '체력 증가', description: '방패병 체력 증가', levels: pct('hpPct', [8, 16, 24, 32, 40]) },
-  { id: 'shield_regen', kind: 'trait', rarity: 'common', unitId: 'shield', name: '체력 회복', description: '초당 최대 체력 % 회복', levels: pct('regenPctPerSec', [0.5, 1, 1.5, 2, 2.5]) },
-  { id: 'shield_def', kind: 'trait', rarity: 'common', unitId: 'shield', name: '방어 강화', description: '방패병 방어력 증가', levels: pct('defPct', [8, 16, 24, 32, 40]) },
-  { id: 'shield_speed', kind: 'trait', rarity: 'common', unitId: 'shield', name: '이동 속도 증가', description: '방패병 이동 속도 증가', levels: pct('moveSpeedPct', [5, 10, 15, 20, 25]) },
-  { id: 'shield_taunt', kind: 'trait', rarity: 'rare', unitId: 'shield', name: '도발', description: '주변 적 도발 확률', levels: pct('tauntChance', [15, 22, 30, 38, 45]) },
-  // 활병 (원거리)
-  { id: 'archer_pierce', kind: 'trait', rarity: 'common', unitId: 'archer', name: '관통', description: '1마리 관통 확률', levels: pct('pierceChance', [25, 35, 45, 55, 65]) },
-  { id: 'archer_atkspeed', kind: 'trait', rarity: 'common', unitId: 'archer', name: '공격속도 증가', description: '활병 공격속도 증가', levels: pct('atkSpeedPct', [8, 16, 24, 32, 40]) },
-  { id: 'archer_range', kind: 'trait', rarity: 'common', unitId: 'archer', name: '사거리 증가', description: '활병 사거리 증가', levels: pct('rangePct', [5, 10, 15, 20, 25]) },
-  { id: 'archer_crit', kind: 'trait', rarity: 'common', unitId: 'archer', name: '치명타 확률', description: '치명타 확률 증가 (배수 1.5배)', levels: pct('critChance', [6, 12, 18, 24, 30]) },
-  { id: 'archer_firearrow', kind: 'trait', rarity: 'rare', unitId: 'archer', name: '불화살', description: '발동 시 추가피해 130% 고정', excludesTower: true, levels: [{ chance: 30, bonusDmgPct: 130 }, { chance: 45, bonusDmgPct: 130 }, { chance: 60, bonusDmgPct: 130 }, { chance: 75, bonusDmgPct: 130 }, { chance: 90, bonusDmgPct: 130 }] },
-  // 창병 (중근거리)
-  { id: 'spear_extra', kind: 'trait', rarity: 'common', unitId: 'spear', name: '추가타', description: '확률로 추가피해 50% 고정', levels: [{ chance: 15, bonusDmgPct: 50 }, { chance: 25, bonusDmgPct: 50 }, { chance: 35, bonusDmgPct: 50 }, { chance: 45, bonusDmgPct: 50 }, { chance: 55, bonusDmgPct: 50 }] },
-  { id: 'spear_atk', kind: 'trait', rarity: 'common', unitId: 'spear', name: '공격력 증가', description: '창병 공격력 증가', levels: pct('atkPct', [8, 16, 24, 32, 40]) },
-  { id: 'spear_bleed', kind: 'trait', rarity: 'common', unitId: 'spear', name: '출혈', description: '확률로 출혈 피해 (타워 제외)', excludesTower: true, levels: [{ chance: 12, dotPct: 2 }, { chance: 18, dotPct: 3 }, { chance: 24, dotPct: 4 }, { chance: 30, dotPct: 5 }, { chance: 36, dotPct: 6 }] },
-  { id: 'spear_reduce', kind: 'trait', rarity: 'common', unitId: 'spear', name: '피해량 감소', description: '받는 피해 감소', levels: pct('dmgReductionPct', [4, 8, 12, 16, 20]) },
-  { id: 'spear_charge', kind: 'trait', rarity: 'rare', unitId: 'spear', name: '돌진', description: '사거리 내 빠른 접근 + 추가피해', levels: pct('chargeDmgPct', [5, 9, 13, 17, 22]) },
-  // 투석기 (광역) — 고급 2장
-  { id: 'catapult_range', kind: 'trait', rarity: 'common', unitId: 'catapult', name: '사거리 증가', description: '투석기 사거리 증가', levels: pct('rangePct', [5, 10, 15, 20, 25]) },
-  { id: 'catapult_atk', kind: 'trait', rarity: 'common', unitId: 'catapult', name: '공격력 증가', description: '투석기 공격력 증가', levels: pct('atkPct', [8, 16, 24, 32, 40]) },
-  { id: 'catapult_aoe', kind: 'trait', rarity: 'common', unitId: 'catapult', name: '타격범위 증가', description: '광역 타격 범위 증가', levels: pct('aoePct', [8, 14, 20, 26, 32]) },
-  { id: 'catapult_fire', kind: 'trait', rarity: 'rare', unitId: 'catapult', name: '화염공격', description: '추가공격 + 3초 화상 (타워 제외)', excludesTower: true, levels: [{ chance: 15, burnPct: 1 }, { chance: 25, burnPct: 1.5 }, { chance: 35, burnPct: 2 }, { chance: 45, burnPct: 2.5 }, { chance: 55, burnPct: 3 }] },
-  { id: 'catapult_stun', kind: 'trait', rarity: 'rare', unitId: 'catapult', name: '기절', description: '타격 시 기절 (최대 1.2초)', levels: [{ stunSec: 0.4 }, { stunSec: 0.6 }, { stunSec: 0.8 }, { stunSec: 1.0 }, { stunSec: 1.2 }] },
-  // 검사 (근거리 딜러) — 고급 2장
-  { id: 'sword_atk', kind: 'trait', rarity: 'common', unitId: 'swordsman', name: '공격력 증가', description: '검사 공격력 증가', levels: pct('atkPct', [8, 16, 24, 32, 40]) },
-  { id: 'sword_hp', kind: 'trait', rarity: 'common', unitId: 'swordsman', name: '체력 증가', description: '검사 체력 증가', levels: pct('hpPct', [8, 16, 24, 32, 40]) },
-  { id: 'sword_evade', kind: 'trait', rarity: 'common', unitId: 'swordsman', name: '회피력 증가', description: '검사 회피율 증가', levels: pct('evadePct', [8, 14, 20, 26, 32]) },
-  { id: 'sword_lifesteal', kind: 'trait', rarity: 'rare', unitId: 'swordsman', name: '흡혈', description: '가한 데미지의 % 회복', levels: pct('lifestealPct', [4, 7, 10, 13, 16]) },
-  { id: 'sword_berserker', kind: 'trait', rarity: 'rare', unitId: 'swordsman', name: '버서커', description: '공/공속/이속 대폭 증가, 방어 감소 (최대 -95%)', levels: [{ atkPct: 25, defPct: -40, atkSpeedPct: 10, moveSpeedPct: 10 }, { atkPct: 50, defPct: -55, atkSpeedPct: 20, moveSpeedPct: 20 }, { atkPct: 75, defPct: -70, atkSpeedPct: 30, moveSpeedPct: 30 }, { atkPct: 100, defPct: -85, atkSpeedPct: 40, moveSpeedPct: 40 }, { atkPct: 130, defPct: -95, atkSpeedPct: 50, moveSpeedPct: 50 }] },
-];
 
 /** 글로벌 버프 카드 17장 (일반 10 + 고급 7) — 설계 05 */
 export const GLOBAL_CARDS: CardDef[] = [
@@ -76,9 +105,16 @@ export const GLOBAL_CARDS: CardDef[] = [
   { id: 'g_revive', kind: 'global', rarity: 'rare', name: '영웅 부활 시간 감소', description: '영웅 부활 대기 시간 감소', levels: pct('reviveCdrPct', [10, 18, 26, 34, 42]) },
 ];
 
-export const ALL_CARDS: CardDef[] = [...UNIT_CARDS, ...TRAIT_CARDS, ...GLOBAL_CARDS];
+export const ALL_CARDS: CardDef[] = [...UNIT_CARDS, ...GLOBAL_CARDS];
 
 export const CARD_MAX_LEVEL = 5;
+
+/** 유닛 ID → 유닛 카드 (Lv트랙 mods 조회용) */
+const UNIT_CARD_BY_UNIT = new Map(UNIT_CARDS.map((c) => [c.unitId!, c]));
+
+export function unitCardByUnit(unitId: string): CardDef | undefined {
+  return UNIT_CARD_BY_UNIT.get(unitId as never);
+}
 
 /** 카드 풀 고갈 시 등장하는 재화 카드 */
 export const RESOURCE_CARDS = [

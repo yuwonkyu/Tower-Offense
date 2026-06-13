@@ -269,9 +269,7 @@ export default function BattleScreen() {
                     {card ? (
                       <>
                         <Text style={styles.cardSlotText}>{card.name.slice(0, 2)}</Text>
-                        {card.kind !== 'unit' && (
-                          <Text style={styles.cardSlotLv}>{lv}</Text>
-                        )}
+                        <Text style={styles.cardSlotLv}>{lv}</Text>
                       </>
                     ) : (
                       <Text style={styles.cardSlotPlus}>+</Text>

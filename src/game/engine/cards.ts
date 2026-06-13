@@ -1,4 +1,4 @@
-import { ALL_CARDS, CARD_MAX_LEVEL, cardById, GLOBAL_CARDS, TRAIT_CARDS } from '@/data/cards';
+import { ALL_CARDS, CARD_MAX_LEVEL, cardById, GLOBAL_CARDS, unitCardByUnit } from '@/data/cards';
 import type { CardDef, UnitId } from '@/game/types';
 
 export const CARD_SLOTS = 8;
@@ -50,6 +50,10 @@ export interface UnitMods {
   stunSec: number;
   /** 불굴 — 치명적 피해 시 HP 1 생존 쿨타임 (0 = 미보유) */
   undyingCooldownSec: number;
+  /** 수호 오라 — 주변 아군 받는 피해 감소 % (방패병 Lv5 제공) */
+  auraDmgReductionPct: number;
+  /** 멀티샷 — 추가 동시 타격 대상 수 (활병 Lv5 = 1) */
+  multishot: number;
 }
 
 const MOD_KEYS: (keyof UnitMods)[] = [
@@ -70,6 +74,8 @@ const MOD_KEYS: (keyof UnitMods)[] = [
   'dmgReductionPct',
   'chargeDmgPct',
   'stunSec',
+  'auraDmgReductionPct',
+  'multishot',
 ];
 
 export function zeroMods(): UnitMods {
@@ -98,6 +104,8 @@ export function zeroMods(): UnitMods {
     burnPct: 0,
     stunSec: 0,
     undyingCooldownSec: 0,
+    auraDmgReductionPct: 0,
+    multishot: 0,
   };
 }
 
@@ -158,17 +166,14 @@ export class CardSystem {
     return units;
   }
 
-  private maxLevelOf(card: CardDef): number {
-    return card.kind === 'unit' ? 1 : CARD_MAX_LEVEL;
+  private maxLevelOf(_card: CardDef): number {
+    return CARD_MAX_LEVEL; // 유닛 카드도 Lv트랙 (1→5)
   }
 
   private isPickable(card: CardDef): boolean {
     const lv = this.level(card.id);
     if (lv >= this.maxLevelOf(card)) return false;
     if (this.slotsFull && lv === 0) return false; // 슬롯 풀 → 강화만
-    if (card.kind === 'trait' && card.unitId && !this.ownedUnits.includes(card.unitId)) {
-      return false; // 미보유 유닛 특성 제외
-    }
     return true;
   }
 
@@ -197,13 +202,13 @@ export class CardSystem {
     return out;
   }
 
-  /** 카드 획득/강화. maxed = Lv5 도달 (MAX 보너스 대상 — 유닛 카드 제외) */
+  /** 카드 획득/강화. maxed = Lv5 도달 (MAX 보너스 대상 — 유닛 트랙 포함) */
   pick(cardId: string): { maxed: boolean } {
     const card = cardById(cardId);
     if (!card) return { maxed: false };
     const lv = Math.min(this.maxLevelOf(card), this.level(cardId) + 1);
     this.owned.set(cardId, lv);
-    return { maxed: card.kind !== 'unit' && lv >= CARD_MAX_LEVEL };
+    return { maxed: lv >= CARD_MAX_LEVEL };
   }
 
   // ── 효과 집계 ─────────────────────────────────────────
@@ -217,11 +222,11 @@ export class CardSystem {
     return acc;
   }
 
-  /** 해당 유닛의 합산 보정치 (유닛 특성 + 글로벌) */
+  /** 해당 유닛의 합산 보정치 (유닛 Lv트랙 현재 레벨 + 글로벌) */
   unitMods(unitId: UnitId): UnitMods {
     const acc = this.globalMods();
-    for (const card of TRAIT_CARDS) {
-      if (card.unitId !== unitId) continue;
+    const card = unitCardByUnit(unitId);
+    if (card) {
       const lv = this.level(card.id);
       if (lv > 0) addEffects(acc, card.levels[lv - 1]);
     }

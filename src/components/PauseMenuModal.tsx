@@ -48,6 +48,8 @@ const EFFECT_LABEL: Record<string, string> = {
   burnPct: '화상',
   stunSec: '기절',
   cooldownSec: '쿨타임',
+  auraDmgReductionPct: '수호오라',
+  multishot: '멀티샷',
 };
 
 /** 효과 1레벨 묶음을 "공격 +24% · 발동 30%" 형태로 포맷 */
@@ -55,9 +57,11 @@ function formatEffect(effect: Record<string, number>): string {
   const parts: string[] = [];
   for (const [key, val] of Object.entries(effect)) {
     const label = EFFECT_LABEL[key] ?? key;
+    const signed = `${val > 0 ? '+' : ''}${val}`;
     if (key.endsWith('Sec')) parts.push(`${label} ${val}초`);
     else if (key === 'dotPct' || key === 'burnPct') parts.push(`${label} ${val}%/s`);
-    else parts.push(`${label} +${val}%`);
+    else if (key === 'multishot') parts.push(`${label} +${val}타`);
+    else parts.push(`${label} ${signed}%`);
   }
   return parts.join(' · ');
 }
@@ -79,8 +83,10 @@ export function PauseMenuModal({ pickedCards, onResume, onRetry, onExit }: Props
             entries.map(([id, lv]) => {
               const card = cardById(id);
               if (!card) return null;
+              const effect = card.levels[lv - 1];
               const isUnit = card.kind === 'unit';
-              const effect = !isUnit ? card.levels[lv - 1] : undefined;
+              const levelName = isUnit ? card.levelNames?.[lv - 1] : undefined;
+              const effectText = effect ? formatEffect(effect) : '';
               return (
                 <View key={id} style={styles.cardItem}>
                   <View style={styles.cardItemHeader}>
@@ -88,10 +94,12 @@ export function PauseMenuModal({ pickedCards, onResume, onRetry, onExit }: Props
                       {KIND_LABEL[card.kind]}
                     </Text>
                     <Text style={styles.cardName}>{card.name}</Text>
-                    {!isUnit && <Text style={styles.cardLv}>Lv.{lv}</Text>}
+                    <Text style={styles.cardLv}>Lv.{lv}</Text>
                   </View>
                   <Text style={styles.cardEffect}>
-                    {isUnit ? '생성 중' : effect ? formatEffect(effect) : card.description}
+                    {isUnit
+                      ? `${levelName ?? ''}${effectText ? ` · ${effectText}` : ''}`
+                      : effectText || card.description}
                   </Text>
                 </View>
               );

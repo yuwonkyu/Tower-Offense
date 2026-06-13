@@ -148,6 +148,12 @@ export interface CombatEntity {
   buffLeft: number;
   /** 용맹 버프 적용 % (해제 시 되돌리기용) */
   buffPct: number;
+  /** 수호 오라 제공량 0~1 (방패병 Lv5 — 주변 아군 피해감소) */
+  auraValue: number;
+  /** 매 틱 재계산: 받고 있는 수호 오라 피해감소 0~1 (제공자 중 최대) */
+  auraShield: number;
+  /** 멀티샷 추가 타격 대상 수 (활병 Lv5 = 1) */
+  multishot: number;
   // 상태이상 런타임 (피격측)
   bleedLeft: number;
   bleedRate: number; // HP/초
@@ -182,6 +188,9 @@ function zeroProcFields() {
     undyingCd: 0,
     buffLeft: 0,
     buffPct: 0,
+    auraValue: 0,
+    auraShield: 0,
+    multishot: 0,
     bleedLeft: 0,
     bleedRate: 0,
     burnLeft: 0,
@@ -256,6 +265,10 @@ const PIERCE_RADIUS = 3.5;
 const CHARGE_MOVE_MULT = 1.3;
 /** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 7) */
 const VALOR_RADIUS = 34;
+/** 수호 오라(방패병 Lv5): 이 반경 내 아군 피해감소 (카드 개편) */
+const SHIELD_AURA_RADIUS = 12;
+/** 멀티샷(활병 Lv5): 추가 타격 탐색 반경 = 사거리 + 이 보너스 */
+const MULTISHOT_BONUS = 4;
 
 export type EngineResult = 'ongoing' | 'victory';
 
@@ -448,6 +461,26 @@ export class BattleEngine {
     e.buffLeft = 0;
   }
 
+  /**
+   * 수호 오라 재계산 (방패병 Lv5): 매 틱, 아군이 받는 피해감소 = 반경 내 제공자 중 최대.
+   * 제공자가 없으면 즉시 종료 (오버헤드 0).
+   */
+  private updateAuras() {
+    const providers: CombatEntity[] = [];
+    for (const e of this.entities) {
+      if (e.auraShield > 0) e.auraShield = 0; // 이전 틱 값 초기화
+      if (e.side === 'ally' && e.state !== 'dead' && e.auraValue > 0) providers.push(e);
+    }
+    if (providers.length === 0) return;
+    for (const e of this.entities) {
+      if (e.side !== 'ally' || e.state === 'dead' || isStructure(e.kind)) continue;
+      for (const p of providers) {
+        if (p.auraValue <= e.auraShield) continue;
+        if (Math.hypot(e.x - p.x, e.y - p.y) <= SHIELD_AURA_RADIUS) e.auraShield = p.auraValue;
+      }
+    }
+  }
+
   /** dt = 게임 시간 기준 경과 초 (배속 적용 후) */
   tick(dt: number) {
     if (this.result !== 'ongoing') return;
@@ -472,6 +505,7 @@ export class BattleEngine {
     this.updateBossAppearances();
     this.updateRevive(dt);
     this.updateEnemyHero(dt);
+    this.updateAuras();
     this.act(dt);
     this.updateProjectiles(dt);
     this.updateTraps();
@@ -560,6 +594,8 @@ export class BattleEngine {
       burnPct: m?.burnPct ?? 0,
       stunOnHit: m?.stunSec ?? 0,
       undyingCdMax: m?.undyingCooldownSec ?? 0,
+      auraValue: (m?.auraDmgReductionPct ?? 0) / 100,
+      multishot: m?.multishot ?? 0,
     };
   }
 
@@ -1119,6 +1155,10 @@ export class BattleEngine {
         }
         if (extra) this.applyDamage(attacker, extra);
       }
+      // 멀티샷: 사거리 내 추가 적 N마리 동시 타격 (활병 Lv5)
+      if (attacker.multishot > 0) {
+        this.multishotExtra(attacker, target.id, attacker.multishot);
+      }
     }
     // 도발: 공격 시 확률로 주변 적 타깃을 자신으로 전환 (방패병)
     if (attacker.taunt > 0 && Math.random() < attacker.taunt) {
@@ -1129,6 +1169,28 @@ export class BattleEngine {
           c.targetId = attacker.id;
         }
       }
+    }
+  }
+
+  /** 멀티샷: 사거리(+보너스) 내 가까운 적 count마리를 본 타깃과 별개로 추가 타격 */
+  private multishotExtra(attacker: CombatEntity, excludeId: number, count: number) {
+    const reach = Math.max(attacker.range, 1) + MULTISHOT_BONUS;
+    const hit = new Set<number>([excludeId]);
+    for (let k = 0; k < count; k++) {
+      let best: CombatEntity | null = null;
+      let bestD = Infinity;
+      for (const c of this.entities) {
+        if (c.side === attacker.side || c.state === 'dead' || hit.has(c.id)) continue;
+        if (isStructure(c.kind)) continue;
+        const d = Math.hypot(c.x - attacker.x, c.y - attacker.y);
+        if (d <= reach && d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      if (!best) break;
+      hit.add(best.id);
+      this.applyDamage(attacker, best);
     }
   }
 
@@ -1313,7 +1375,10 @@ export class BattleEngine {
    */
   private hurt(target: CombatEntity, dmg: number): number {
     if (target.state === 'dead') return 0;
-    if (target.dmgReduction > 0) dmg *= 1 - target.dmgReduction;
+    // 피해감소(스펙) + 수호 오라 = 곱연산 합성
+    if (target.dmgReduction > 0 || target.auraShield > 0) {
+      dmg *= (1 - target.dmgReduction) * (1 - target.auraShield);
+    }
     target.hp -= dmg;
     if (target.hp <= 0) {
       // 불굴: 치명적 피해 시 HP 1로 생존 (쿨타임)
