@@ -207,8 +207,9 @@ export interface Projectile {
 }
 
 /** 적 동시 생존 캡 — 붕괴 구간 동안 무한 적립된 주둔군이 공략 불가가 되는 것 방지 (+모바일 성능) */
+// 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화, 피드백). 폰 성능 끊기면 100으로 하향
 const ENEMY_MAX_ALIVE = 150;
-const ALLY_MAX_ALIVE = 110;
+const ALLY_MAX_ALIVE = 150;
 /** 유닛 카드 보유 시 기본 초당 생성률 — 물량 스트림으로 전선 상시 유지 (모여서 출발 대신 연속 젠) */
 const ALLY_SPAWN_BASE = 2.0;
 /** 유닛 카드 1장당 추가 생성률 (설계 07: 카드마다 독립 생성) */
