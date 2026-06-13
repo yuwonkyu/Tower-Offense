@@ -13,8 +13,8 @@ export const HEROES: HeroDef[] = [
     id: 'maruhan',
     name: '마루한',
     concept: '돌격대장 (탱커/근접 광역)',
-    // 폰 피드백: 즉사 방지 위해 체력/방어 3배 (160→480 / 35→105) + 영웅 체젠(엔진 1%/s)
-    stats: { atk: 30, def: 105, hp: 480, moveSpeed: 6, range: 2, atkSpeed: 1.2, aoe: 2 },
+    // 폰 피드백: 즉사 방지 체력/방어 2배 (160→320 / 35→70) + 영웅 체젠(엔진 1%/s). x3은 밸런스 붕괴로 x2 하향
+    stats: { atk: 30, def: 70, hp: 320, moveSpeed: 6, range: 2, atkSpeed: 1.2, aoe: 2 },
     growth: { atk: 1, def: 2, hp: 8, atkSpeed: 0.02 },
     skill: {
       name: '투신',
@@ -29,8 +29,8 @@ export const HEROES: HeroDef[] = [
     id: 'mir',
     name: '미르',
     concept: '궁사 (원거리)',
-    // 원거리 사거리 ×0.6 재조정 (25→15) · 체력/방어 3배 (120→360 / 15→45)
-    stats: { atk: 35, def: 45, hp: 360, moveSpeed: 6.5, range: 15, atkSpeed: 1.4, aoe: 1 },
+    // 원거리 사거리 ×0.6 재조정 (25→15) · 체력/방어 2배 (120→240 / 15→30)
+    stats: { atk: 35, def: 30, hp: 240, moveSpeed: 6.5, range: 15, atkSpeed: 1.4, aoe: 1 },
     growth: { atk: 2, def: 1, hp: 5, atkSpeed: 0.03 },
     skill: {
       name: '살소나기',
@@ -44,8 +44,8 @@ export const HEROES: HeroDef[] = [
     id: 'noeul',
     name: '노을',
     concept: '암살자',
-    // 체력/방어 3배 (130→390 / 15→45)
-    stats: { atk: 35, def: 45, hp: 390, moveSpeed: 7, range: 1, atkSpeed: 2, aoe: 1 },
+    // 체력/방어 2배 (130→260 / 15→30)
+    stats: { atk: 35, def: 30, hp: 260, moveSpeed: 7, range: 1, atkSpeed: 2, aoe: 1 },
     growth: { atk: 2, def: 1, hp: 6, atkSpeed: 0.04 },
     skill: {
       name: '피노을',
