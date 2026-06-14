@@ -115,6 +115,15 @@ export default function HeroesScreen() {
                 </Pressable>
               </View>
 
+              {/* 패시브 (상시) */}
+              <View style={styles.passiveRow}>
+                <Text style={styles.passiveTag}>패시브</Text>
+                <View style={styles.passiveInfo}>
+                  <Text style={styles.passiveName}>{hero.passive.name}</Text>
+                  <Text style={styles.passiveDesc}>{hero.passive.description}</Text>
+                </View>
+              </View>
+
               {/* 초기화 */}
               <Pressable
                 style={[styles.resetBtn, diamonds < HERO_RESET_DIAMONDS && styles.resetBtnDisabled]}
@@ -258,6 +267,22 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   skillBtnText: { fontSize: 12, color: 'rgba(200,170,255,0.9)', fontWeight: '600' },
+
+  passiveRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  passiveTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(100,220,120,0.95)',
+    backgroundColor: 'rgba(100,200,100,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(100,200,100,0.35)',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  passiveInfo: { flex: 1 },
+  passiveName: { fontSize: 12, fontWeight: '600', color: 'rgba(120,220,140,0.95)' },
+  passiveDesc: { fontSize: 11, color: Colors.textSub },
 
   resetBtn: {
     paddingVertical: 8,

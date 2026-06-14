@@ -20,7 +20,7 @@ import {
   expToNextLevel,
   HERO_BASE_REGEN_PCT,
 } from '@/game/formulas';
-import { spawnWeightsForStage, type SpawnWeight } from '@/data/spawnWeights';
+import { spawnFreq, spawnWeightsForStage, type SpawnWeight } from '@/data/spawnWeights';
 import { CardSystem, type UnitMods } from './cards';
 
 /** 전체 유닛 정의 룩업 */
@@ -163,6 +163,8 @@ export interface CombatEntity {
   executeChance: number;
   /** 피격 플래시 남은 시간 (초) — 타격감 연출, 렌더 전용 */
   hitFlash: number;
+  /** 기계 유닛 — 회복 불가 (치유/재생/흡혈 대상 제외) */
+  noHeal: boolean;
   // 상태이상 런타임 (피격측)
   bleedLeft: number;
   bleedRate: number; // HP/초
@@ -203,6 +205,7 @@ function zeroProcFields() {
     healBonus: 0,
     executeChance: 0,
     hitFlash: 0,
+    noHeal: false,
     bleedLeft: 0,
     bleedRate: 0,
     burnLeft: 0,
@@ -370,6 +373,7 @@ export class BattleEngine {
     this.cards = new CardSystem(config.difficulty === 'hard', new Set(unlockedUnits));
     this.hero = this.makeHero();
     this.addEntity(this.hero);
+    this.refreshHeroStats(); // 패시브(상시 자기 강화) 즉시 반영
 
     // 적 영웅: 스테이지별 자동 성장 (설계 09) — 스폰 가속은 스테이지 테이블에 이미 반영
     this.enemyHero = ENEMY_HEROES.find((h) => h.id === config.enemyHero) ?? ENEMY_HEROES[0];
@@ -649,6 +653,7 @@ export class BattleEngine {
       multishot: m?.multishot ?? 0,
       healBonus: (m?.healBonusPct ?? 0) / 100,
       executeChance: (m?.executeChance ?? 0) / 100,
+      noHeal: !!def.mechanical,
     };
   }
 
@@ -843,12 +848,25 @@ export class BattleEngine {
     while (this.allySpawnAcc >= 1) {
       this.allySpawnAcc -= 1;
       if (this.countSide('ally') - 1 >= ALLY_MAX_ALIVE) continue;
-      const unitId = unitCards[Math.floor(Math.random() * unitCards.length)];
+      // 빈도 배수로 가중 선택 — 원거리/공성/기마 ↓, 근접 ↑ (피드백)
+      const unitId = this.weightedUnitPick(unitCards);
       // 성 포위: 타워 기준 360° 골든 앵글로 화면 가장자리에서 생성 → 사방에서 공성 (피드백 5)
       this.allySpawnAngle = (this.allySpawnAngle + 2.39996323) % (Math.PI * 2);
       const { x, y } = this.edgePointFromTower(this.allySpawnAngle);
       this.addEntity(this.makeUnit('ally', unitId, x, y));
     }
+  }
+
+  /** 아군 생성 유닛 가중 선택 (spawnFreq 기준 — 원거리/공성/기마 비중 ↓) */
+  private weightedUnitPick(units: UnitId[]): UnitId {
+    let total = 0;
+    for (const u of units) total += spawnFreq(u);
+    let roll = Math.random() * total;
+    for (const u of units) {
+      roll -= spawnFreq(u);
+      if (roll <= 0) return u;
+    }
+    return units[units.length - 1];
   }
 
   private pickEnemyUnit(): UnitId {
@@ -945,7 +963,7 @@ export class BattleEngine {
       }
       e.attackCd = Math.max(0, e.attackCd - dt);
       e.retargetCd -= dt;
-      if (e.regenPctPerSec > 0 && e.hp < e.maxHp) {
+      if (e.regenPctPerSec > 0 && e.hp < e.maxHp && !e.noHeal) {
         e.hp = Math.min(e.maxHp, e.hp + (e.maxHp * e.regenPctPerSec * dt) / 100);
       }
 
@@ -1408,7 +1426,7 @@ export class BattleEngine {
     // 팔라딘 패시브: 회복 오라 — 타워 주변 적 유닛 HP/초 = 공격력 × 0.3
     if (def.id === 'paladin') {
       for (const c of this.entities) {
-        if (c.side !== 'enemy' || c.state === 'dead' || isStructure(c.kind)) continue;
+        if (c.side !== 'enemy' || c.state === 'dead' || isStructure(c.kind) || c.noHeal) continue;
         if (c.hp >= c.maxHp) continue;
         if (Math.hypot(c.x - towerX, c.y - towerY) <= towerRadius + 5) {
           c.hp = Math.min(c.maxHp, c.hp + this.enemyHeroAtk * 0.3 * dt);
@@ -1483,7 +1501,7 @@ export class BattleEngine {
       dmg *= 1 + attacker.chargeDmgPct / 100;
     }
     const dealt = this.hurt(target, dmg);
-    if (attacker.lifestealPct > 0 && attacker.state !== 'dead') {
+    if (attacker.lifestealPct > 0 && attacker.state !== 'dead' && !attacker.noHeal) {
       attacker.hp = Math.min(attacker.maxHp, attacker.hp + dealt * attacker.lifestealPct);
     }
     if (isDead(target)) return;
@@ -1567,25 +1585,26 @@ export class BattleEngine {
     const g = this.heroDef.growth;
     const lv = this.level - 1;
     const m: UnitMods = this.cards.heroMods();
+    const p = this.heroDef.passive; // 고유 패시브 (상시 자기 강화)
     const f = (pct: number) => 1 + pct / 100;
-    // 투신 버프: 지속 중 전 스탯 % 증가
+    // 용맹 버프: 지속 중 전 스탯 % 증가
     const buff = this.heroSkillBuffLeft > 0 ? f(this.heroBuffPct) : 1;
     const h = this.hero;
     const hpRatio = h.maxHp > 0 ? h.hp / h.maxHp : 1;
-    h.atk = (s.atk + g.atk * lv) * f(m.atkPct) * buff;
+    h.atk = (s.atk + g.atk * lv) * f(m.atkPct + (p.atkPct ?? 0)) * buff;
     h.def = (s.def + g.def * lv) * f(m.defPct) * buff;
     h.maxHp = (s.hp + g.hp * lv) * f(m.hpPct) * buff;
     h.hp = h.maxHp * hpRatio;
     h.atkSpeed = (s.atkSpeed + g.atkSpeed * lv) * f(m.atkSpeedPct) * buff;
-    h.moveSpeed = s.moveSpeed * f(m.moveSpeedPct);
+    h.moveSpeed = s.moveSpeed * f(m.moveSpeedPct + (p.moveSpeedPct ?? 0));
     h.range = s.range * f(m.rangePct);
-    h.evade = m.evadePct / 100;
-    h.critChance = m.critChance / 100;
+    h.evade = (m.evadePct + (p.evadePct ?? 0)) / 100;
+    h.critChance = (m.critChance + (p.critPct ?? 0)) / 100;
     h.lifestealPct = m.lifestealPct / 100;
     h.regenPctPerSec = HERO_BASE_REGEN_PCT + m.regenPctPerSec;
     h.frenzyAtkPct = m.frenzyAtkPct;
-    // 영웅 프록 (글로벌 카드 — 불굴 등)
-    h.dmgReduction = m.dmgReductionPct / 100;
+    // 영웅 프록 (글로벌 카드 — 불굴 등) + 패시브 피해감소
+    h.dmgReduction = (m.dmgReductionPct + (p.dmgReductionPct ?? 0)) / 100;
     h.undyingCdMax = m.undyingCooldownSec;
   }
 
@@ -1597,7 +1616,7 @@ export class BattleEngine {
     let lowest = 1;
     for (const c of this.entities) {
       if (c.side !== e.side || c.state === 'dead' || c.id === e.id) continue;
-      if (isStructure(c.kind)) continue; // 구조물은 회복 대상 제외
+      if (isStructure(c.kind) || c.noHeal) continue; // 구조물·기계(투석기) 회복 대상 제외
       const ratio = c.hp / c.maxHp;
       if (ratio < lowest && ratio < 0.999) {
         lowest = ratio;

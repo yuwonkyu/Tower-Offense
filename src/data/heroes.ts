@@ -23,6 +23,11 @@ export const HEROES: HeroDef[] = [
       cooldown: 60,
       duration: 60,
     },
+    passive: {
+      name: '강철 의지',
+      description: '받는 피해 -15% (상시)',
+      dmgReductionPct: 15,
+    },
     reviveSeconds: HERO_REVIVE_SECONDS,
   },
   {
@@ -38,6 +43,11 @@ export const HEROES: HeroDef[] = [
       ratio: 1.5,
       cooldown: 60,
     },
+    passive: {
+      name: '매의 눈',
+      description: '치명타 확률 +20% (상시, 치명타 1.5배)',
+      critPct: 20,
+    },
     reviveSeconds: HERO_REVIVE_SECONDS,
   },
   {
@@ -52,6 +62,12 @@ export const HEROES: HeroDef[] = [
       description: '지정 위치로 이동 + 광역 피해(130%) + 공격력 디버프',
       ratio: 1.3,
       cooldown: 60,
+    },
+    passive: {
+      name: '그림자 보',
+      description: '이동속도 +25% · 회피 +20% (상시)',
+      moveSpeedPct: 25,
+      evadePct: 20,
     },
     reviveSeconds: HERO_REVIVE_SECONDS,
   },

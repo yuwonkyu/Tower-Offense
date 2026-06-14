@@ -16,6 +16,27 @@ const BASE_RATIO_RANGES: { maxStage: number; ratio: Partial<Record<UnitId, numbe
 /** 신규 유닛(마법사/암살자 등) 가중치 — 임시값, 밸런스 테스트 후 조정 */
 const NEW_UNIT_WEIGHT = 12;
 
+/**
+ * 유닛별 생성 빈도 배수 (1 = 기본). 원거리/공성/기마는 ↓ → 근접 위주의 백병전 연출 + 밸런스.
+ * 아군·적군 양측 공통 적용 (피드백: 투석기/원거리/기마병 생성속도 하향).
+ */
+export const SPAWN_FREQ: Partial<Record<UnitId, number>> = {
+  // "조금" 하향 — 공성 화력(투석기) 급감 방지하면서 근접 비중↑ (시뮬: 과하면 타워 미타격)
+  catapult: 0.7,
+  archer: 0.8,
+  mageLow: 0.8,
+  mageMid: 0.8,
+  mageHigh: 0.8,
+  assassin: 0.8,
+  cavalry: 0.7,
+  bomber: 0.85,
+  healer: 0.85,
+};
+
+export function spawnFreq(unitId: UnitId): number {
+  return SPAWN_FREQ[unitId] ?? 1;
+}
+
 export interface SpawnWeight {
   unitId: UnitId;
   weight: number;
@@ -28,12 +49,12 @@ export function spawnWeightsForStage(stage: number, units: UnitId[]): SpawnWeigh
 
   let weights = units.map((unitId) => ({
     unitId,
-    weight: range.ratio[unitId] ?? NEW_UNIT_WEIGHT,
+    weight: (range.ratio[unitId] ?? NEW_UNIT_WEIGHT) * spawnFreq(unitId),
   }));
 
-  // 단일 유닛 스테이지에서 비율표가 0이면 균등 분배
+  // 단일 유닛 스테이지에서 비율표가 0이면 균등 분배 (빈도 배수 반영)
   if (weights.reduce((sum, w) => sum + w.weight, 0) <= 0) {
-    weights = units.map((unitId) => ({ unitId, weight: 1 }));
+    weights = units.map((unitId) => ({ unitId, weight: spawnFreq(unitId) }));
   }
   return weights;
 }

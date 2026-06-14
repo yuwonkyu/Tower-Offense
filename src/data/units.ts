@@ -45,6 +45,7 @@ export const BASE_UNITS: UnitDef[] = [
     stats: { atk: 45, def: 35, hp: 90, moveSpeed: 1.5, range: 27, atkSpeed: 0.33, aoe: 5 },
     // 투사체 지면 조준: 비행 중 이동한 타깃은 빗나감 (공성 무기 — 정지 목표에 강함)
     projectileSpeed: 20,
+    mechanical: true, // 기계 — 회복 불가
     priority: 'tank',
     exp: 4,
     unlockStage: 0,

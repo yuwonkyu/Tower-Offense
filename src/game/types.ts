@@ -61,6 +61,8 @@ export interface UnitDef {
   projectileSpeed?: number;
   /** 내재 체력 재생 — 초당 최대 체력 % (근접병 유지력, 카드 보정과 합산). 미설정 = 0 */
   regenPctPerSec?: number;
+  /** 기계 유닛 — 회복 불가 (투석기 등 비생물). 치유/재생/흡혈 대상 제외 */
+  mechanical?: boolean;
   special?: string;
 }
 
@@ -88,6 +90,16 @@ export interface HeroDef {
     ratio: number;
     cooldown: number;
     duration?: number;
+  };
+  /** 영웅 고유 패시브 (상시 자기 강화) */
+  passive: {
+    name: string;
+    description: string;
+    dmgReductionPct?: number;
+    critPct?: number;
+    evadePct?: number;
+    moveSpeedPct?: number;
+    atkPct?: number;
   };
   /** 부활 시간 (초) */
   reviveSeconds: number;
