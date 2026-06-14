@@ -314,12 +314,12 @@ export default function BattleScreen() {
           level={heroLevel}
           onPick={pickCard}
           onReroll={() => {
-            // 프리미엄 패스 = 광고 없이 즉시 무제한 리롤, 그 외엔 광고 시청
+            // 프리미엄 = 광고 없이 무료 리롤(픽당 1회), 그 외엔 광고 시청
             if (adFree) useBattleStore.getState().rerollCards();
             else setAdKind('cardReroll');
           }}
           rerollUsed={rerollUsed}
-          rerollUnlimited={adFree}
+          rerollFree={adFree}
         />
       )}
 

@@ -27,8 +27,9 @@ export const IAP_PRODUCTS = {
   diamonds_x1: { name: '다이아 100', diamonds: 100, priceLabel: '$0.99', bonusLabel: '' },
   diamonds_x10: { name: '다이아 1,100', diamonds: 1100, priceLabel: '$9.99', bonusLabel: '+10% 보너스' },
   diamonds_x100: { name: '다이아 12,000', diamonds: 12000, priceLabel: '$99.99', bonusLabel: '+20% 보너스' },
-  // 프리미엄 패스(평생 1회): 광고 제거 + x4 영구 + 리롤 무제한(광고X) + 정산 골드 2배
-  adFree: { name: '프리미엄 패스', priceLabel: '₩100,000', bonusLabel: '' },
+  // 프리미엄 패스(평생 1회): 광고 제거 + x4 영구 + 리롤 무료(픽당 1회) + 정산 골드 2배
+  // 가격: 분석 권장 ₩19,000~29,000 (다이아 미지급 QoL 번들 — 고래팩가 회피, 전환율 확보)
+  adFree: { name: '프리미엄 패스', priceLabel: '₩29,000', bonusLabel: '' },
 } as const;
 
 export type IapProductId = keyof typeof IAP_PRODUCTS;

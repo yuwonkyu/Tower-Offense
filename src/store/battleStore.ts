@@ -253,10 +253,8 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   rerollCards: () => {
     const s = get();
-    if (s.phase !== 'cardPick' || !s.engine) return;
-    // 프리미엄 패스 = 리롤 무제한(광고X). 그 외엔 픽당 1회(광고)
-    const unlimited = useMonetizationStore.getState().adFree;
-    if (s.rerollUsed && !unlimited) return;
+    // 리롤은 픽당 1회 (프리미엄=무료·광고X / 일반=광고) — 무료/광고 분기는 battle.tsx
+    if (s.phase !== 'cardPick' || s.rerollUsed || !s.engine) return;
     const pickChoices = s.engine.cards.rollChoices(3);
     if (pickChoices.length === 0) return;
     set({ pickChoices, rerollUsed: true, pickTimeLeft: CARD_PICK_SECONDS });

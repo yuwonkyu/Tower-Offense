@@ -169,54 +169,49 @@ export default function ShopScreen() {
           </View>
         </View>
 
-        {/* 골드 상점 (다이아로 구매) */}
-        <Text style={styles.sectionLabel}>골드 상점 (다이아로 구매)</Text>
-        {GOLD_SHOP_PACKS.map((pack, i) => {
-          const afford = diamonds >= pack.diamonds;
-          return (
-            <View key={i} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>
-                  ◈ 금화 {pack.gold.toLocaleString()}
-                  {pack.bonusLabel ? <Text style={styles.bonusTag}>  {pack.bonusLabel}</Text> : null}
-                </Text>
-                <View style={styles.costChip}>
-                  <Text style={[styles.costText, { color: Colors.diamond }]}>💎 {pack.diamonds}</Text>
-                </View>
-              </View>
-              <Pressable
-                style={[styles.pullBtn, !afford && styles.pullBtnDisabled]}
-                onPress={() => handleBuyGold(i)}
-                disabled={!afford}
-              >
-                <Text style={styles.pullBtnText}>{afford ? '구매' : '다이아 부족'}</Text>
-              </Pressable>
-            </View>
-          );
-        })}
-
-        {/* 다이아 충전 (현금 IAP 스텁) */}
-        <Text style={styles.sectionLabel}>다이아 충전 (IAP 스텁)</Text>
-        {DIAMOND_PACK_IDS.map((id) => (
-          <View key={id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>
-                💎 {IAP_PRODUCTS[id].name}
-                {IAP_PRODUCTS[id].bonusLabel ? (
-                  <Text style={styles.bonusTag}>  {IAP_PRODUCTS[id].bonusLabel}</Text>
-                ) : null}
-              </Text>
-              <View style={styles.costChip}>
-                <Text style={[styles.costText, { color: Colors.textMain }]}>
-                  {IAP_PRODUCTS[id].priceLabel}
-                </Text>
-              </View>
-            </View>
-            <Pressable style={styles.pullBtn} onPress={() => handlePurchase(id)}>
-              <Text style={styles.pullBtnText}>구매 (스텁)</Text>
-            </Pressable>
+        {/* 골드 상점 (다이아로 구매) — 한 줄 3옵션 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>골드 상점</Text>
+            <Text style={styles.cardSubInfo}>다이아로 구매</Text>
           </View>
-        ))}
+          <View style={styles.tierRow}>
+            {GOLD_SHOP_PACKS.map((pack, i) => {
+              const afford = diamonds >= pack.diamonds;
+              return (
+                <Pressable
+                  key={i}
+                  style={[styles.packBtn, !afford && styles.pullBtnDisabled]}
+                  onPress={() => handleBuyGold(i)}
+                  disabled={!afford}
+                >
+                  <Text style={styles.packMain}>◈{pack.gold.toLocaleString()}</Text>
+                  <Text style={styles.packCost}>💎{pack.diamonds}</Text>
+                  {pack.bonusLabel ? <Text style={styles.tierDiscount}>{pack.bonusLabel}</Text> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* 다이아 충전 (현금 IAP 스텁) — 한 줄 3옵션 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>다이아 충전</Text>
+            <Text style={styles.cardSubInfo}>IAP 스텁</Text>
+          </View>
+          <View style={styles.tierRow}>
+            {DIAMOND_PACK_IDS.map((id) => (
+              <Pressable key={id} style={styles.packBtn} onPress={() => handlePurchase(id)}>
+                <Text style={styles.packMain}>💎{IAP_PRODUCTS[id].diamonds.toLocaleString()}</Text>
+                <Text style={styles.packCost}>{IAP_PRODUCTS[id].priceLabel}</Text>
+                {IAP_PRODUCTS[id].bonusLabel ? (
+                  <Text style={styles.tierDiscount}>{IAP_PRODUCTS[id].bonusLabel.replace(' 보너스', '')}</Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        </View>
 
         {/* 무료 다이아 (IAA) */}
         <View style={styles.card}>
@@ -247,7 +242,7 @@ export default function ShopScreen() {
             </View>
           </View>
           <Text style={styles.cardDesc}>
-            평생 1회 결제 · 광고 제거 + x4 배속 영구 + 카드 리롤 무제한(광고X) + 정산 획득 금화 2배
+            평생 1회 결제 · 광고 제거 + x4 배속 영구 + 카드 리롤 무료(광고X, 픽당 1회) + 정산 획득 금화 2배
           </Text>
           {!adFree && (
             <Pressable style={styles.pullBtn} onPress={() => handlePurchase('adFree')}>
@@ -417,6 +412,19 @@ const styles = StyleSheet.create({
   tierLabel: { fontSize: 14, fontWeight: '800', color: Colors.textMain },
   tierCost: { fontSize: 11, color: Colors.diamond, fontWeight: '600' },
   tierDiscount: { fontSize: 9, color: 'rgba(120,220,120,0.95)', fontWeight: '700' },
+
+  packBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: 'rgba(93,173,226,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(93,173,226,0.35)',
+    alignItems: 'center',
+    gap: 1,
+  },
+  packMain: { fontSize: 13, fontWeight: '800', color: Colors.textMain },
+  packCost: { fontSize: 11, color: Colors.diamond, fontWeight: '600' },
 
   pullBtn: {
     paddingVertical: 10,
