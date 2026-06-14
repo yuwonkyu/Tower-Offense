@@ -83,45 +83,92 @@ export const UNIT_CARDS: CardDef[] = [
 
 /**
  * 해금형 유닛 카드 7종 (신규 적 유닛 = 가챠/스테이지로 해금 시 전투 카드 풀 등장).
- * 특수기술 없이 Lv2~5 스탯업 트랙만 (특수기술은 기본 5종 전용 — 추후 설계).
+ * 기본 5종처럼 Lv1 생성 / Lv2·4 스탯업 / Lv3·5 특수기술 트랙.
  */
-const EXTRA_LEVEL_NAMES = ['생성', '강화 I', '강화 II', '강화 III', '강화 IV (MAX)'];
-
 export const EXTRA_UNIT_CARDS: CardDef[] = [
   {
     id: 'unit_mageLow', kind: 'unit', rarity: 'common', name: '하급 마법사', unitId: 'mageLow',
-    description: '단일 원거리 마법 — 매직미사일', levelNames: EXTRA_LEVEL_NAMES,
-    levels: [{}, { atkPct: 12, atkSpeedPct: 10 }, { atkPct: 24, atkSpeedPct: 20 }, { atkPct: 36, atkSpeedPct: 30 }, { atkPct: 50, atkSpeedPct: 40 }],
+    description: '단일 원거리 마법 — 매직미사일',
+    levelNames: ['생성', '마력 강화', '관통', '마력 강화 II', '마력 폭발'],
+    levels: [
+      {},
+      { atkPct: 12, atkSpeedPct: 10 },
+      { atkPct: 12, atkSpeedPct: 10, pierceChance: 45 },
+      { atkPct: 26, atkSpeedPct: 20, pierceChance: 45 },
+      { atkPct: 26, atkSpeedPct: 20, pierceChance: 45, chance: 50, bonusDmgPct: 130 },
+    ],
   },
   {
     id: 'unit_mageMid', kind: 'unit', rarity: 'common', name: '중급 마법사', unitId: 'mageMid',
-    description: '소형 광역 마법 — 매직볼', levelNames: EXTRA_LEVEL_NAMES,
-    levels: [{}, { atkPct: 12, aoePct: 10 }, { atkPct: 24, aoePct: 18 }, { atkPct: 36, aoePct: 26 }, { atkPct: 50, aoePct: 34 }],
+    description: '소형 광역 마법 — 매직볼', excludesTower: true,
+    levelNames: ['생성', '마력 강화', '화염 마법', '마력 강화 II', '빙결'],
+    levels: [
+      {},
+      { atkPct: 12, aoePct: 10 },
+      { atkPct: 12, aoePct: 10, chance: 35, burnPct: 2 },
+      { atkPct: 26, aoePct: 18, chance: 35, burnPct: 2 },
+      { atkPct: 26, aoePct: 18, chance: 35, burnPct: 2, stunSec: 0.5 },
+    ],
   },
   {
     id: 'unit_mageHigh', kind: 'unit', rarity: 'rare', name: '상급 마법사', unitId: 'mageHigh',
-    description: '체인 라이트닝 — 고화력 원거리', levelNames: EXTRA_LEVEL_NAMES,
-    levels: [{}, { atkPct: 14, atkSpeedPct: 10 }, { atkPct: 28, atkSpeedPct: 20 }, { atkPct: 42, atkSpeedPct: 30 }, { atkPct: 58, atkSpeedPct: 42 }],
+    description: '체인 라이트닝 — 고화력 원거리',
+    levelNames: ['생성', '마력 강화', '체인 라이트닝', '마력 강화 II', '과부하'],
+    levels: [
+      {},
+      { atkPct: 14, atkSpeedPct: 10 },
+      { atkPct: 14, atkSpeedPct: 10, multishot: 1 },
+      { atkPct: 28, atkSpeedPct: 20, multishot: 1 },
+      { atkPct: 28, atkSpeedPct: 20, multishot: 2, critChance: 25 },
+    ],
   },
   {
     id: 'unit_assassin', kind: 'unit', rarity: 'rare', name: '암살자', unitId: 'assassin',
-    description: '원거리 사냥꾼 — 회피/기동', levelNames: EXTRA_LEVEL_NAMES,
-    levels: [{}, { atkPct: 14, evadePct: 8 }, { atkPct: 28, evadePct: 14, moveSpeedPct: 10 }, { atkPct: 42, evadePct: 20, moveSpeedPct: 15 }, { atkPct: 58, evadePct: 26, moveSpeedPct: 20 }],
+    description: '원거리 사냥꾼 — 회피/기동',
+    levelNames: ['생성', '예기 강화', '치명타', '예기 강화 II', '흡혈'],
+    levels: [
+      {},
+      { atkPct: 14, evadePct: 8 },
+      { atkPct: 14, evadePct: 8, critChance: 25 },
+      { atkPct: 28, evadePct: 14, moveSpeedPct: 12, critChance: 25 },
+      { atkPct: 28, evadePct: 14, moveSpeedPct: 12, critChance: 35, lifestealPct: 12 },
+    ],
   },
   {
     id: 'unit_bomber', kind: 'unit', rarity: 'rare', name: '폭탄병', unitId: 'bomber',
-    description: '자폭 광역 — 밀집 처리', levelNames: EXTRA_LEVEL_NAMES,
-    levels: [{}, { atkPct: 14, aoePct: 10 }, { atkPct: 28, aoePct: 18 }, { atkPct: 42, aoePct: 26 }, { atkPct: 60, aoePct: 34 }],
+    description: '자폭 광역 — 밀집 처리', excludesTower: true,
+    levelNames: ['생성', '폭약 강화', '소이탄', '폭약 강화 II', '충격파'],
+    levels: [
+      {},
+      { atkPct: 14, aoePct: 10 },
+      { atkPct: 14, aoePct: 10, chance: 40, burnPct: 2 },
+      { atkPct: 28, aoePct: 18, chance: 40, burnPct: 2 },
+      { atkPct: 28, aoePct: 18, chance: 40, burnPct: 2, stunSec: 0.8 },
+    ],
   },
   {
     id: 'unit_healer', kind: 'unit', rarity: 'rare', name: '치유사', unitId: 'healer',
-    description: '아군 회복 지원 — 유지력', levelNames: EXTRA_LEVEL_NAMES,
-    levels: [{}, { hpPct: 14, defPct: 10 }, { hpPct: 26, defPct: 18 }, { hpPct: 38, defPct: 26 }, { hpPct: 52, defPct: 34 }],
+    description: '아군 회복 지원 — 유지력',
+    levelNames: ['생성', '치유 강화', '집중 치유', '치유 강화 II', '수호 오라'],
+    levels: [
+      {},
+      { hpPct: 14, defPct: 10 },
+      { hpPct: 14, defPct: 10, healBonusPct: 50 },
+      { hpPct: 26, defPct: 18, healBonusPct: 50 },
+      { hpPct: 26, defPct: 18, healBonusPct: 120, auraDmgReductionPct: 12 },
+    ],
   },
   {
     id: 'unit_cavalry', kind: 'unit', rarity: 'rare', name: '기마병', unitId: 'cavalry',
-    description: '고속 기동 — 원거리 위협', levelNames: EXTRA_LEVEL_NAMES,
-    levels: [{}, { atkPct: 12, hpPct: 10 }, { atkPct: 24, hpPct: 18, moveSpeedPct: 8 }, { atkPct: 36, hpPct: 26, moveSpeedPct: 14 }, { atkPct: 50, hpPct: 34, moveSpeedPct: 20 }],
+    description: '고속 기동 — 원거리 위협', excludesTower: true,
+    levelNames: ['생성', '기동 강화', '돌격', '기동 강화 II', '창상'],
+    levels: [
+      {},
+      { atkPct: 12, hpPct: 10 },
+      { atkPct: 12, hpPct: 10, chargeDmgPct: 18 },
+      { atkPct: 24, hpPct: 18, moveSpeedPct: 12, chargeDmgPct: 18 },
+      { atkPct: 24, hpPct: 18, moveSpeedPct: 14, chargeDmgPct: 18, chance: 30, dotPct: 5 },
+    ],
   },
 ];
 

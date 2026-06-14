@@ -61,6 +61,8 @@ export interface UnitMods {
   auraDmgReductionPct: number;
   /** 멀티샷 — 추가 동시 타격 대상 수 (활병 Lv5 = 1) */
   multishot: number;
+  /** 치유량 증가 % (치유사 전용) */
+  healBonusPct: number;
 }
 
 const MOD_KEYS: (keyof UnitMods)[] = [
@@ -83,6 +85,7 @@ const MOD_KEYS: (keyof UnitMods)[] = [
   'stunSec',
   'auraDmgReductionPct',
   'multishot',
+  'healBonusPct',
 ];
 
 export function zeroMods(): UnitMods {
@@ -113,6 +116,7 @@ export function zeroMods(): UnitMods {
     undyingCooldownSec: 0,
     auraDmgReductionPct: 0,
     multishot: 0,
+    healBonusPct: 0,
   };
 }
 

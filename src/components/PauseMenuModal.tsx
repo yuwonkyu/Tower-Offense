@@ -50,6 +50,7 @@ const EFFECT_LABEL: Record<string, string> = {
   cooldownSec: '쿨타임',
   auraDmgReductionPct: '수호오라',
   multishot: '멀티샷',
+  healBonusPct: '치유량',
 };
 
 /** 효과 1레벨 묶음을 "공격 +24% · 발동 30%" 형태로 포맷 */

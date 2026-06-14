@@ -154,6 +154,8 @@ export interface CombatEntity {
   auraShield: number;
   /** 멀티샷 추가 타격 대상 수 (활병 Lv5 = 1) */
   multishot: number;
+  /** 치유량 증가 배율 0~ (치유사 — 0 = 기본) */
+  healBonus: number;
   // 상태이상 런타임 (피격측)
   bleedLeft: number;
   bleedRate: number; // HP/초
@@ -191,6 +193,7 @@ function zeroProcFields() {
     auraValue: 0,
     auraShield: 0,
     multishot: 0,
+    healBonus: 0,
     bleedLeft: 0,
     bleedRate: 0,
     burnLeft: 0,
@@ -598,6 +601,7 @@ export class BattleEngine {
       undyingCdMax: m?.undyingCooldownSec ?? 0,
       auraValue: (m?.auraDmgReductionPct ?? 0) / 100,
       multishot: m?.multishot ?? 0,
+      healBonus: (m?.healBonusPct ?? 0) / 100,
     };
   }
 
@@ -1426,6 +1430,18 @@ export class BattleEngine {
       target.bleedLeft = DOT_DURATION;
       target.bleedRate = (target.maxHp * attacker.bleedDotPct) / 100;
     }
+    // 화염/기절 (히트스캔 — 마법사/폭탄병 Lv트랙). 투사체는 impactProjectile에서 별도 처리
+    if (
+      attacker.burnChance > 0 &&
+      !isStructure(target.kind) &&
+      Math.random() < attacker.burnChance
+    ) {
+      target.burnLeft = DOT_DURATION;
+      target.burnRate = (target.maxHp * attacker.burnPct) / 100;
+    }
+    if (attacker.stunOnHit > 0 && !isStructure(target.kind)) {
+      target.stunLeft = Math.max(target.stunLeft, attacker.stunOnHit);
+    }
     this.retaliate(target, attacker.id);
   }
 
@@ -1529,7 +1545,8 @@ export class BattleEngine {
     const inRange = this.moveToward(e, target.x, target.y, e.range + BODY_RADIUS, dt);
     e.state = inRange ? 'attacking' : 'moving';
     if (inRange) {
-      target.hp = Math.min(target.maxHp, target.hp + HEALER_HEAL_PER_SEC * dt);
+      const heal = HEALER_HEAL_PER_SEC * (1 + e.healBonus) * dt;
+      target.hp = Math.min(target.maxHp, target.hp + heal);
     }
   }
 
