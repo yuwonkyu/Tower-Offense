@@ -222,6 +222,23 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
           />
         ))}
 
+        {/* 스킬/광역 발동 연출: 퍼지며 사라지는 링 (설계 연출) */}
+        {engine.effects.map((fx) => {
+          const progress = 1 - fx.life / fx.maxLife; // 0→1
+          return (
+            <Circle
+              key={`fx${fx.id}`}
+              cx={fx.x * scale}
+              cy={fx.y * scale}
+              r={fx.maxRadius * progress * scale}
+              color={fx.color}
+              style="stroke"
+              strokeWidth={2.5}
+              opacity={fx.life / fx.maxLife}
+            />
+          );
+        })}
+
         {/* 아군 영웅 */}
         <Circle
           cx={hero.x * scale}

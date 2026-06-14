@@ -230,6 +230,17 @@ export interface Projectile {
   targetTower: boolean;
 }
 
+/** 전투 시각 이펙트 (스킬/광역 발동 위치 — 퍼지며 사라지는 링). 렌더 전용, 시뮬은 무시 */
+export interface VisualEffect {
+  id: number;
+  x: number;
+  y: number;
+  maxRadius: number;
+  life: number;
+  maxLife: number;
+  color: string;
+}
+
 /** 적 동시 생존 캡 — 붕괴 구간 동안 무한 적립된 주둔군이 공략 불가가 되는 것 방지 (+모바일 성능) */
 // 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화, 피드백). 폰 성능 끊기면 100으로 하향
 const ENEMY_MAX_ALIVE = 150;
@@ -286,6 +297,8 @@ export type EngineResult = 'ongoing' | 'victory';
 export class BattleEngine {
   entities: CombatEntity[] = [];
   projectiles: Projectile[] = [];
+  /** 시각 이펙트 (스킬 발동 링) — BattleField가 렌더 */
+  effects: VisualEffect[] = [];
   hero: CombatEntity;
   towerHp: number;
   kills = 0;
@@ -400,6 +413,7 @@ export class BattleEngine {
       this.heroSkillBuffLeft = duration;
       this.refreshHeroStats();
       this.applyValorBuff(pct, duration);
+      this.spawnEffect(this.hero.x, this.hero.y, VALOR_RADIUS, 'rgba(255,210,90,0.9)'); // 용맹 = 황금 버프링
     } else {
       // 타깃 지점: 영웅 주변 가장 가까운 적 (없으면 발동 보류)
       const h = this.hero;
@@ -422,6 +436,8 @@ export class BattleEngine {
         h.y = target.y;
       }
       const radius = isNoeul ? 4 : 6; // 살소나기는 더 넓은 화살비
+      // 발동 위치 링: 노을=보라(도약/암살), 미르=하늘색(화살비)
+      this.spawnEffect(target.x, target.y, radius, isNoeul ? 'rgba(200,90,230,0.95)' : 'rgba(150,210,255,0.95)');
       const atk = h.atk * ratio;
       for (const c of this.entities) {
         if (c.side !== 'enemy' || c.state === 'dead') continue;
@@ -522,6 +538,19 @@ export class BattleEngine {
     this.updateProjectiles(dt);
     this.updateTraps();
     this.removeDead();
+    this.updateEffects(dt);
+  }
+
+  /** 시각 이펙트 수명 갱신 (렌더 전용) */
+  private updateEffects(dt: number) {
+    if (this.effects.length === 0) return;
+    for (const e of this.effects) e.life -= dt;
+    this.effects = this.effects.filter((e) => e.life > 0);
+  }
+
+  /** 스킬/광역 발동 위치에 퍼지는 링 이펙트 추가 */
+  private spawnEffect(x: number, y: number, maxRadius: number, color: string, life = 0.55) {
+    this.effects.push({ id: this.nextId++, x, y, maxRadius, life, maxLife: life, color });
   }
 
   // ── 생성 ──────────────────────────────────────────────
@@ -1343,6 +1372,7 @@ export class BattleEngine {
           for (let i = 0; i < 5; i++) {
             const at = allies[Math.floor(Math.random() * allies.length)];
             this.areaDamage(at.x, at.y, 3, this.enemyHeroAtk * 2);
+            this.spawnEffect(at.x, at.y, 3, 'rgba(255,90,90,0.95)'); // 메테오 낙하 지점
           }
           this.enemyHeroSkillCd = this.enemyHeroSkillCdMax;
         }
@@ -1358,6 +1388,7 @@ export class BattleEngine {
         );
         if (hasTarget) {
           this.areaDamage(towerX, towerY, radius, this.enemyHeroAtk * ratio);
+          this.spawnEffect(towerX, towerY, radius, 'rgba(255,120,60,0.9)'); // 성 주변 휩쓸기/신성 광역
           this.enemyHeroSkillCd = this.enemyHeroSkillCdMax;
         }
       }
