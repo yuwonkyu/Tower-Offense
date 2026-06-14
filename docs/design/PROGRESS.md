@@ -248,6 +248,15 @@
 - UnitMods.healBonusPct + CombatEntity.healBonus 추가, EXTRA_UNIT_CARDS levels에 특수기술 주입, PauseMenuModal 라벨
 - 검증: tsc 0 / 7종 Lv5 강제 테스트 — 전 유닛 프록필드 정상(멀티샷2·치유1.2·화염0.35·기절0.5 등), 적 화상·기절 실적용 확인 / 기본유닛 회귀 시뮬 스1·5·10 정상
 
+## 마법사 진화형 카드 통합 (2026-06-14)
+- 마법사 3종 카드(하급/중급/상급)를 **단일 "마법사" 진화 카드**로 통합 — Lv1 하급 → Lv3 중급 → Lv5 상급으로 생성 유닛 자체가 진화 (원 설계 "유닛 진화 체감")
+- 통합 Lv트랙: Lv2 마력강화 / Lv3 중급진화+화염 / Lv4 강화 / Lv5 상급진화+체인(멀티샷)+치명타
+- `CardDef.evolve`(atLevel→unitId) 필드 + `evolvedUnitId()` 헬퍼. UNIT_CARD_BY_UNIT에 진화 대상(중급/상급)도 같은 카드로 매핑 → makeUnit/spawnAllies 시그니처 변경 없이 진화 후 mods가 카드에서 조회됨
+- `CardSystem.ownedUnits`가 현재 레벨 기준 진화 유닛 반환 → 스폰이 자동으로 진화 형태 생성
+- 해금 게이팅: 마법사 카드 = mageLow 해금 시 등장(이후 레벨로 진화). REQUIRES_UNLOCK = {mageLow, assassin, bomber, healer, cavalry}. 해금 유닛 카드 7→5장, 인게임 유닛 카드 10장
+- 메타(가챠/유닛탭/강화)는 하급/중급/상급 별도 유지 — 진화 형태가 해당 티어 메타 강화 보너스를 그대로 받음
+- 검증: tsc 0 / Lv1-2 하급·Lv3-4 중급(화염)·Lv5 상급(화염+체인+치명타) 진화 확인, 미해금 게이팅 정상, 기본유닛 회귀 정상
+
 ## 영웅 스킬 구현 + 시뮬 노트 (2026-06-12)
 
 - 스킬 쿨타임을 엔진으로 이관 (`heroSkillCd`) — 배속/cdr 카드 일관 적용, HUD는 동기화만

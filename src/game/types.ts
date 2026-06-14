@@ -123,6 +123,8 @@ export interface CardDef {
   levels: CardLevelEffect[];
   /** 유닛 Lv트랙 각 레벨 이름 (Lv1~Lv5) — CardPickModal 표시용 */
   levelNames?: string[];
+  /** 유닛 진화: 카드 레벨이 atLevel 이상이면 해당 유닛으로 생성 (마법사 하급→중급→상급) */
+  evolve?: { atLevel: number; unitId: UnitId }[];
   /** 타워/구조물 미적용 여부 (출혈/화염 등 % 피해형) */
   excludesTower?: boolean;
 }

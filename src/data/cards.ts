@@ -87,39 +87,21 @@ export const UNIT_CARDS: CardDef[] = [
  */
 export const EXTRA_UNIT_CARDS: CardDef[] = [
   {
-    id: 'unit_mageLow', kind: 'unit', rarity: 'common', name: '하급 마법사', unitId: 'mageLow',
-    description: '단일 원거리 마법 — 매직미사일',
-    levelNames: ['생성', '마력 강화', '관통', '마력 강화 II', '마력 폭발'],
-    levels: [
-      {},
-      { atkPct: 12, atkSpeedPct: 10 },
-      { atkPct: 12, atkSpeedPct: 10, pierceChance: 45 },
-      { atkPct: 26, atkSpeedPct: 20, pierceChance: 45 },
-      { atkPct: 26, atkSpeedPct: 20, pierceChance: 45, chance: 50, bonusDmgPct: 130 },
+    // 마법사 = 진화형 단일 카드: Lv1 하급 → Lv3 중급 → Lv5 상급 (생성 유닛 자체가 진화)
+    id: 'unit_mage', kind: 'unit', rarity: 'rare', name: '마법사', unitId: 'mageLow',
+    description: '레벨업으로 진화 — 하급→중급→상급', excludesTower: true,
+    evolve: [
+      { atLevel: 1, unitId: 'mageLow' },
+      { atLevel: 3, unitId: 'mageMid' },
+      { atLevel: 5, unitId: 'mageHigh' },
     ],
-  },
-  {
-    id: 'unit_mageMid', kind: 'unit', rarity: 'common', name: '중급 마법사', unitId: 'mageMid',
-    description: '소형 광역 마법 — 매직볼', excludesTower: true,
-    levelNames: ['생성', '마력 강화', '화염 마법', '마력 강화 II', '빙결'],
+    levelNames: ['하급 마법사', '마력 강화', '중급 마법사 (진화)', '마력 강화 II', '상급 마법사 (진화)'],
     levels: [
       {},
-      { atkPct: 12, aoePct: 10 },
-      { atkPct: 12, aoePct: 10, chance: 35, burnPct: 2 },
-      { atkPct: 26, aoePct: 18, chance: 35, burnPct: 2 },
-      { atkPct: 26, aoePct: 18, chance: 35, burnPct: 2, stunSec: 0.5 },
-    ],
-  },
-  {
-    id: 'unit_mageHigh', kind: 'unit', rarity: 'rare', name: '상급 마법사', unitId: 'mageHigh',
-    description: '체인 라이트닝 — 고화력 원거리',
-    levelNames: ['생성', '마력 강화', '체인 라이트닝', '마력 강화 II', '과부하'],
-    levels: [
-      {},
-      { atkPct: 14, atkSpeedPct: 10 },
-      { atkPct: 14, atkSpeedPct: 10, multishot: 1 },
-      { atkPct: 28, atkSpeedPct: 20, multishot: 1 },
-      { atkPct: 28, atkSpeedPct: 20, multishot: 2, critChance: 25 },
+      { atkPct: 14, atkSpeedPct: 8 },
+      { atkPct: 14, atkSpeedPct: 8, chance: 35, burnPct: 2 },
+      { atkPct: 26, atkSpeedPct: 16, chance: 35, burnPct: 2 },
+      { atkPct: 26, atkSpeedPct: 16, chance: 35, burnPct: 2, multishot: 1, critChance: 20 },
     ],
   },
   {
@@ -203,13 +185,27 @@ export const ALL_CARDS: CardDef[] = [...UNIT_CARDS, ...EXTRA_UNIT_CARDS, ...GLOB
 
 export const CARD_MAX_LEVEL = 5;
 
-/** 유닛 ID → 유닛 카드 (Lv트랙 mods 조회용) — 기본 5종 + 해금 7종 */
-const UNIT_CARD_BY_UNIT = new Map(
-  [...UNIT_CARDS, ...EXTRA_UNIT_CARDS].map((c) => [c.unitId!, c]),
-);
+/**
+ * 유닛 ID → 유닛 카드 (Lv트랙 mods 조회용) — 기본 5종 + 해금 카드.
+ * 진화 유닛(마법사)은 진화 대상(중급/상급)도 같은 카드로 매핑 → 진화 후에도 mods가 카드에서 조회됨.
+ */
+const UNIT_CARD_BY_UNIT = new Map<string, CardDef>();
+for (const c of [...UNIT_CARDS, ...EXTRA_UNIT_CARDS]) {
+  if (c.unitId) UNIT_CARD_BY_UNIT.set(c.unitId, c);
+  if (c.evolve) for (const e of c.evolve) UNIT_CARD_BY_UNIT.set(e.unitId, c);
+}
 
 export function unitCardByUnit(unitId: string): CardDef | undefined {
-  return UNIT_CARD_BY_UNIT.get(unitId as never);
+  return UNIT_CARD_BY_UNIT.get(unitId);
+}
+
+/** 카드의 현재 레벨 기준 생성 유닛 ID (진화 반영 — 마법사 하급/중급/상급) */
+export function evolvedUnitId(card: CardDef, level: number): string {
+  let result = card.unitId!;
+  if (card.evolve) {
+    for (const e of card.evolve) if (level >= e.atLevel) result = e.unitId;
+  }
+  return result;
 }
 
 /** 카드 풀 고갈 시 등장하는 재화 카드 */

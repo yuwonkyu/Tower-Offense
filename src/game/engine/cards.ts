@@ -2,6 +2,7 @@ import {
   ALL_CARDS,
   CARD_MAX_LEVEL,
   cardById,
+  evolvedUnitId,
   GLOBAL_CARDS,
   REQUIRES_UNLOCK,
   unitCardByUnit,
@@ -171,12 +172,14 @@ export class CardSystem {
     return this.owned.size >= CARD_SLOTS;
   }
 
-  /** 보유한 유닛 카드의 유닛들 (생성 활성화) */
+  /** 보유한 유닛 카드가 현재 생성하는 유닛들 (진화 반영 — 마법사 하급/중급/상급) */
   get ownedUnits(): UnitId[] {
     const units: UnitId[] = [];
     for (const [id, lv] of this.owned) {
       const card = cardById(id);
-      if (card?.kind === 'unit' && card.unitId && lv > 0) units.push(card.unitId);
+      if (card?.kind === 'unit' && card.unitId && lv > 0) {
+        units.push(evolvedUnitId(card, lv) as UnitId);
+      }
     }
     return units;
   }
