@@ -278,6 +278,8 @@ const VALOR_RADIUS = 34;
 const SHIELD_AURA_RADIUS = 12;
 /** 멀티샷(활병 Lv5): 추가 타격 탐색 반경 = 사거리 + 이 보너스 */
 const MULTISHOT_BONUS = 4;
+/** 일격(암살자 Lv5): 보스는 즉사 면역 → 대신 공격력 × 이 배수의 큰 피해 (방어 무시) */
+const EXECUTE_BOSS_MULT = 7;
 
 export type EngineResult = 'ongoing' | 'victory';
 
@@ -1407,14 +1409,17 @@ export class BattleEngine {
 
   private applyDamage(attacker: CombatEntity, target: CombatEntity) {
     if (target.evade > 0 && Math.random() < target.evade) return;
-    // 일격(암살자 Lv5): 확률로 즉사 — 구조물·보스 면역
+    // 일격(암살자 Lv5): 확률 발동 — 일반 즉사 / 보스는 면역 대신 큰 피해(공격력×배수, 방어 무시)
     if (
       attacker.executeChance > 0 &&
       !isStructure(target.kind) &&
-      !BOSS_KINDS.has(target.kind) &&
       Math.random() < attacker.executeChance
     ) {
-      this.onDeath(target);
+      if (BOSS_KINDS.has(target.kind)) {
+        this.hurt(target, attacker.atk * EXECUTE_BOSS_MULT);
+      } else {
+        this.onDeath(target);
+      }
       return;
     }
     let atk = attacker.atk;
