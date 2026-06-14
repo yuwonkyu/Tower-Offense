@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { StageDifficulty, UnitId } from '@/game/types';
 import { EXTRA_UNLOCKS } from '@/data/stages';
 import { BASE_UNITS } from '@/data/units';
-import { NEW_ENEMY_UNITS } from '@/data/enemyUnits';
+import { MAGE_EVOLUTION, META_HIDDEN_UNITS, NEW_ENEMY_UNITS } from '@/data/enemyUnits';
 import { HEROES } from '@/data/heroes';
 import {
   bulkGachaCost,
@@ -46,10 +46,11 @@ export interface HeroMetaInfo {
 
 // ── 가챠 풀 ───────────────────────────────────────────────────────────
 
+// 가챠 풀: 마법사 진화 중급/상급은 제외 (mageLow = "마법사" 대표 1종으로 통합)
 const ALL_UNIT_IDS: UnitId[] = [
   ...BASE_UNITS.map((u) => u.id),
   ...NEW_ENEMY_UNITS.map((u) => u.id),
-];
+].filter((id) => !META_HIDDEN_UNITS.has(id));
 
 const HERO_IDS = HEROES.map((h) => h.id);
 
@@ -290,6 +291,11 @@ export const useProgressStore = create<ProgressState>()(
         const result: Record<string, number> = {};
         for (const [unitId, level] of Object.entries(s.unitLevels)) {
           result[unitId] = unitUpgradeStatBonus(level);
+        }
+        // 마법사 진화 형태(중급/상급)는 "마법사"(mageLow) 강화 보너스를 공유
+        const mageBonus = result[MAGE_EVOLUTION[0]];
+        if (mageBonus !== undefined) {
+          for (const form of MAGE_EVOLUTION) result[form] = mageBonus;
         }
         return result;
       },

@@ -2,11 +2,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { BASE_UNITS } from '@/data/units';
-import { NEW_ENEMY_UNITS } from '@/data/enemyUnits';
+import { META_HIDDEN_UNITS, NEW_ENEMY_UNITS } from '@/data/enemyUnits';
 import { unitUpgradeCardCost, unitUpgradeGoldCost, unitUpgradeStatBonus } from '@/game/formulas';
 import { useProgressStore } from '@/store/progressStore';
 
-const ALL_UNITS = [...BASE_UNITS, ...NEW_ENEMY_UNITS];
+// 마법사 중급/상급은 "마법사"(하급) 한 종으로 통합 — 메타 목록에서 숨김
+const ALL_UNITS = [...BASE_UNITS, ...NEW_ENEMY_UNITS].filter((u) => !META_HIDDEN_UNITS.has(u.id));
 
 export default function UnitsScreen() {
   const unlockedUnits = useProgressStore((s) => s.unlockedUnits);

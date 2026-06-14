@@ -8,15 +8,16 @@ import type { UnitDef } from '@/game/types';
  */
 export const NEW_ENEMY_UNITS: UnitDef[] = [
   {
+    // 메타(가챠/유닛탭)에선 "마법사" 대표 — 인게임에선 Lv1 하급 → Lv3 중급 → Lv5 상급으로 진화
     id: 'mageLow',
-    name: '하급 마법사',
-    concept: '매직미사일 (단일)',
+    name: '마법사',
+    concept: '마법 진화 라인 (하급→중급→상급)',
     stats: { atk: 30, def: 5, hp: 40, moveSpeed: 4, range: 9, atkSpeed: 0.7, aoe: 1 },
     priority: 'nearest',
     exp: 6,
     unlockStage: 11,
     enemyDebutStage: 11,
-    special: '매직미사일 단일 공격',
+    special: '레벨업으로 중급·상급 마법사로 진화',
   },
   {
     id: 'mageMid',
@@ -88,3 +89,10 @@ export const NEW_ENEMY_UNITS: UnitDef[] = [
 
 /** 폭탄병 자폭 후 EXP */
 export const BOMBER_EXPLODED_EXP = 5;
+
+/**
+ * 마법사 진화 라인. 메타(가챠/유닛탭/강화)에선 mageLow가 "마법사" 대표 1종,
+ * 중급/상급은 인게임 진화 전용이라 메타에서 숨김 — "마법사" 강화 시 진화 형태 전부에 적용.
+ */
+export const MAGE_EVOLUTION: UnitDef['id'][] = ['mageLow', 'mageMid', 'mageHigh'];
+export const META_HIDDEN_UNITS = new Set<UnitDef['id']>(['mageMid', 'mageHigh']);
