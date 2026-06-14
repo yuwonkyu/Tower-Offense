@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { GameSpeed } from '@/game/formulas';
-import { CARD_PICK_SECONDS, expToNextLevel } from '@/game/formulas';
+import { CARD_PICK_SECONDS, expToNextLevel, HARD_MODE } from '@/game/formulas';
 import type { CardDef, HeroDef, StageConfig, StageDifficulty } from '@/game/types';
 import type { BattleEngine } from '@/game/engine/engine';
 import { getStageConfig } from '@/data/stages';
@@ -73,9 +73,11 @@ interface BattleState {
   reset: () => void;
 }
 
-/** 프리미엄 패스 보유 시 정산 획득 금화 2배 (미보유 1배) */
-function premiumGoldMult(): number {
-  return useMonetizationStore.getState().adFree ? 2 : 1;
+/** 정산 금화 배수 = 프리미엄 패스(2배) × 하드 모드(2배) 합성 */
+function settlementGoldMult(config: StageConfig | null): number {
+  const premium = useMonetizationStore.getState().adFree ? 2 : 1;
+  const hard = config?.difficulty === 'hard' ? HARD_MODE.rewardMultiplier : 1;
+  return premium * hard;
 }
 
 export const useBattleStore = create<BattleState>((set, get) => ({
@@ -171,7 +173,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
     if (timeLeft <= 0) {
       const elapsed = s.config ? s.config.timeLimit : 600;
-      const gold = calcGoldReward(s.config?.stage ?? 1, s.kills, false) * premiumGoldMult();
+      const gold = calcGoldReward(s.config?.stage ?? 1, s.kills, false) * settlementGoldMult(s.config);
       set({ timeLeft: 0, phase: 'defeat', clearTime: elapsed, goldEarned: gold });
       return;
     }
@@ -208,7 +210,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
     const isVictory = engine.result === 'victory';
     const goldEarned = isVictory
-      ? calcGoldReward(s.config?.stage ?? 1, engine.kills, true) * premiumGoldMult()
+      ? calcGoldReward(s.config?.stage ?? 1, engine.kills, true) * settlementGoldMult(s.config)
       : s.goldEarned;
 
     set({

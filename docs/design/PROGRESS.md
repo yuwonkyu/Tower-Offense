@@ -264,6 +264,14 @@
 - 검증: tsc 0 / 암살자 일격0.05·폭탄 aoe8·기마 전스탯1.5배 엔티티 확인, 일격 전투 무크래시
 - **일격 보스 처리 (2026-06-14)**: 보스(미니/팔라딘)는 즉사 면역 → 대신 공격력 × `EXECUTE_BOSS_MULT`(=7) 큰 피해(방어 무시). 결정적 검증: 팔라딘 690HP에 644(=atk×7) 피해, 즉사 아님
 
+## 하드 모드 UI 노출 (2026-06-14)
+- 하드 모드는 엔진/데이터엔 이미 구현(getStageConfig difficulty, HARD_MODE 타워HP×2·적+20%·보상×2, hardStagesUnlocked)인데 UI 접근 불가였음 → 노출
+- **홈**: 일반/하드 난이도 토글. 하드 스테이지는 일반 10·20·30 클리어 시 10단계씩 개방(hardStagesUnlocked). 클리어 표시(✓), 하드 셀 적색 테마
+- **battle.tsx**: difficulty 라우트 파라미터 → startStage(stage, diff), 정산/다음/재시도에 난이도 유지, 스테이지 라벨에 '하드' 표기
+- **보상 2배 적용**: battleStore `settlementGoldMult` = 프리미엄(2배) × 하드(rewardMultiplier 2배) 합성 — 그전엔 HARD_MODE.rewardMultiplier 미사용이었음
+- **progressStore**: `hardCleared` 별도 추적(일반 clearedStage와 분리), onStageClear difficulty 파라미터 — 하드는 일반 진행도 전진 안 함
+- 검증: tsc 0 / 스10 타워HP 12000→24000(×2)·적 스탯 ×1.20 확인
+
 ## 영웅 스킬 구현 + 시뮬 노트 (2026-06-12)
 
 - 스킬 쿨타임을 엔진으로 이관 (`heroSkillCd`) — 배속/cdr 카드 일관 적용, HUD는 동기화만

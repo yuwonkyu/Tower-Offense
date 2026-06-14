@@ -34,8 +34,9 @@ function formatTime(seconds: number): string {
 }
 
 export default function BattleScreen() {
-  const { stage } = useLocalSearchParams<{ stage: string }>();
+  const { stage, difficulty } = useLocalSearchParams<{ stage: string; difficulty?: string }>();
   const stageNum = Number(stage) || 1;
+  const diff: 'normal' | 'hard' = difficulty === 'hard' ? 'hard' : 'normal';
 
   const config = useBattleStore((s) => s.config);
   const hero = useBattleStore((s) => s.hero);
@@ -88,7 +89,7 @@ export default function BattleScreen() {
   pausedRef.current = adKind !== null || menuOpen;
 
   const retryStage = () => {
-    router.replace({ pathname: '/battle', params: { stage: stageNum } });
+    router.replace({ pathname: '/battle', params: { stage: stageNum, difficulty: diff } });
   };
 
   const handleAdReward = () => {
@@ -123,6 +124,7 @@ export default function BattleScreen() {
         unlocksUnit: config?.unlocksUnit,
         heroId,
         heroExpGained: heroMetaExpForStage(stageNum, true),
+        difficulty: diff,
       });
     } else if (phase === 'defeat') {
       onStageDefeat({
@@ -136,9 +138,9 @@ export default function BattleScreen() {
   }, [phase]);
 
   useEffect(() => {
-    startStage(stageNum);
+    startStage(stageNum, diff);
     return () => reset();
-  }, [stageNum, startStage, reset]);
+  }, [stageNum, diff, startStage, reset]);
 
   // 게임 루프 (BattleField rAF)에서 매 프레임 호출
   const handleFrame = useCallback((engine: BattleEngine, dt: number) => {
@@ -219,7 +221,7 @@ export default function BattleScreen() {
           onFrame={handleFrame}
         />
         <Text style={styles.stageLabel}>
-          스테이지 {config.stage} · 처치 {kills}
+          스테이지 {config.stage}{diff === 'hard' ? ' · 하드' : ''} · 처치 {kills}
         </Text>
 
         {/* 우하단: 생존 아군 유닛 수 (피드백 11) */}
@@ -336,7 +338,7 @@ export default function BattleScreen() {
           }}
           onNextStage={() => {
             const next = Math.min(stageNum + 1, TOTAL_STAGES);
-            router.replace({ pathname: '/battle', params: { stage: next } });
+            router.replace({ pathname: '/battle', params: { stage: next, difficulty: diff } });
           }}
           onRetry={() => {
             // 실패 재도전 = 광고 (설계 06 IAA) — 광고 제거 구매자/승리 후 재시도는 무료

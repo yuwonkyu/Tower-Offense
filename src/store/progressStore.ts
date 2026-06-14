@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { UnitId } from '@/game/types';
+import type { StageDifficulty, UnitId } from '@/game/types';
 import { EXTRA_UNLOCKS } from '@/data/stages';
 import { BASE_UNITS } from '@/data/units';
 import { NEW_ENEMY_UNITS } from '@/data/enemyUnits';
@@ -61,6 +61,8 @@ function randomFrom<T>(arr: T[]): T {
 
 interface ProgressState {
   clearedStage: number;
+  /** 하드 모드 최고 클리어 스테이지 (0 = 없음) */
+  hardCleared: number;
   gold: number;
   diamonds: number;
   unlockedUnits: UnitId[];
@@ -85,6 +87,7 @@ interface ProgressState {
     unlocksUnit?: UnitId;
     heroId: string;
     heroExpGained: number;
+    difficulty?: StageDifficulty;
   }) => void;
   onStageDefeat: (params: {
     goldEarned: number;
@@ -133,6 +136,7 @@ interface ProgressState {
 
 const INITIAL = {
   clearedStage: 0,
+  hardCleared: 0,
   gold: 300,     // 초기 금화 (강화 체험용)
   diamonds: 200, // 초기 다이아 (가챠 체험용)
   unlockedUnits: [] as UnitId[],
@@ -167,9 +171,9 @@ export const useProgressStore = create<ProgressState>()(
     (set, get) => ({
       ...INITIAL,
 
-      onStageClear: ({ stage, goldEarned, unlocksUnit, heroId, heroExpGained }) => {
+      onStageClear: ({ stage, goldEarned, unlocksUnit, heroId, heroExpGained, difficulty }) => {
         const s = get();
-        const newCleared = Math.max(s.clearedStage, stage);
+        const hard = difficulty === 'hard';
 
         const toUnlock = new Set<UnitId>(s.unlockedUnits);
         if (unlocksUnit) toUnlock.add(unlocksUnit);
@@ -177,7 +181,9 @@ export const useProgressStore = create<ProgressState>()(
         if (extras) extras.forEach((u) => toUnlock.add(u));
 
         set({
-          clearedStage: newCleared,
+          // 하드는 별도 트랙(hardCleared) — 일반 진행도(clearedStage)는 일반 클리어로만 전진
+          clearedStage: hard ? s.clearedStage : Math.max(s.clearedStage, stage),
+          hardCleared: hard ? Math.max(s.hardCleared, stage) : s.hardCleared,
           gold: s.gold + goldEarned,
           unlockedUnits: [...toUnlock],
           heroExp: addHeroExpMut(s.heroExp, heroId, heroExpGained),
@@ -394,6 +400,7 @@ export const useProgressStore = create<ProgressState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         clearedStage: s.clearedStage,
+        hardCleared: s.hardCleared,
         gold: s.gold,
         diamonds: s.diamonds,
         unlockedUnits: s.unlockedUnits,
