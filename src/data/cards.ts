@@ -107,25 +107,25 @@ export const EXTRA_UNIT_CARDS: CardDef[] = [
   {
     id: 'unit_assassin', kind: 'unit', rarity: 'rare', name: '암살자', unitId: 'assassin',
     description: '원거리 사냥꾼 — 회피/기동',
-    levelNames: ['생성', '예기 강화', '치명타', '예기 강화 II', '흡혈'],
+    levelNames: ['생성', '예기 강화', '치명타', '예기 강화 II', '일격'],
     levels: [
       {},
       { atkPct: 14, evadePct: 8 },
       { atkPct: 14, evadePct: 8, critChance: 25 },
       { atkPct: 28, evadePct: 14, moveSpeedPct: 12, critChance: 25 },
-      { atkPct: 28, evadePct: 14, moveSpeedPct: 12, critChance: 35, lifestealPct: 12 },
+      { atkPct: 28, evadePct: 14, moveSpeedPct: 12, critChance: 25, executeChance: 5 },
     ],
   },
   {
     id: 'unit_bomber', kind: 'unit', rarity: 'rare', name: '폭탄병', unitId: 'bomber',
-    description: '자폭 광역 — 밀집 처리', excludesTower: true,
-    levelNames: ['생성', '폭약 강화', '소이탄', '폭약 강화 II', '충격파'],
+    description: '자폭 광역 — 밀집 처리',
+    levelNames: ['생성', '폭약 강화', '기절 폭발', '폭약 강화 II', '대폭발'],
     levels: [
       {},
       { atkPct: 14, aoePct: 10 },
-      { atkPct: 14, aoePct: 10, chance: 40, burnPct: 2 },
-      { atkPct: 28, aoePct: 18, chance: 40, burnPct: 2 },
-      { atkPct: 28, aoePct: 18, chance: 40, burnPct: 2, stunSec: 0.8 },
+      { atkPct: 14, aoePct: 10, stunSec: 0.6 },
+      { atkPct: 28, aoePct: 18, stunSec: 0.6 },
+      { atkPct: 28, aoePct: 100, stunSec: 0.6 },
     ],
   },
   {
@@ -142,14 +142,14 @@ export const EXTRA_UNIT_CARDS: CardDef[] = [
   },
   {
     id: 'unit_cavalry', kind: 'unit', rarity: 'rare', name: '기마병', unitId: 'cavalry',
-    description: '고속 기동 — 원거리 위협', excludesTower: true,
-    levelNames: ['생성', '기동 강화', '돌격', '기동 강화 II', '창상'],
+    description: '고속 기동 — 원거리 위협',
+    levelNames: ['생성', '기동 강화', '돌격', '기동 강화 II', '성장 (전 스탯 +50%)'],
     levels: [
       {},
       { atkPct: 12, hpPct: 10 },
       { atkPct: 12, hpPct: 10, chargeDmgPct: 18 },
       { atkPct: 24, hpPct: 18, moveSpeedPct: 12, chargeDmgPct: 18 },
-      { atkPct: 24, hpPct: 18, moveSpeedPct: 14, chargeDmgPct: 18, chance: 30, dotPct: 5 },
+      { atkPct: 50, defPct: 50, hpPct: 50, atkSpeedPct: 50, moveSpeedPct: 50, rangePct: 50, chargeDmgPct: 18 },
     ],
   },
 ];

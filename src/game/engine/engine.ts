@@ -75,6 +75,9 @@ export function isStructure(kind: EntityKind): boolean {
   return STRUCTURE_KINDS.has(kind);
 }
 
+/** 보스류 (미니보스/팔라딘) — 일격 즉사 면역 */
+const BOSS_KINDS: ReadonlySet<string> = new Set(['knightMini', 'mageMini', 'paladinBoss']);
+
 /** 타깃 식별: 양수 = 엔티티 id */
 const NO_TARGET = -1;
 const TOWER_TARGET = -2;
@@ -156,6 +159,8 @@ export interface CombatEntity {
   multishot: number;
   /** 치유량 증가 배율 0~ (치유사 — 0 = 기본) */
   healBonus: number;
+  /** 일격 즉사 확률 0~1 (암살자 Lv5) */
+  executeChance: number;
   // 상태이상 런타임 (피격측)
   bleedLeft: number;
   bleedRate: number; // HP/초
@@ -194,6 +199,7 @@ function zeroProcFields() {
     auraShield: 0,
     multishot: 0,
     healBonus: 0,
+    executeChance: 0,
     bleedLeft: 0,
     bleedRate: 0,
     burnLeft: 0,
@@ -602,6 +608,7 @@ export class BattleEngine {
       auraValue: (m?.auraDmgReductionPct ?? 0) / 100,
       multishot: m?.multishot ?? 0,
       healBonus: (m?.healBonusPct ?? 0) / 100,
+      executeChance: (m?.executeChance ?? 0) / 100,
     };
   }
 
@@ -1400,6 +1407,16 @@ export class BattleEngine {
 
   private applyDamage(attacker: CombatEntity, target: CombatEntity) {
     if (target.evade > 0 && Math.random() < target.evade) return;
+    // 일격(암살자 Lv5): 확률로 즉사 — 구조물·보스 면역
+    if (
+      attacker.executeChance > 0 &&
+      !isStructure(target.kind) &&
+      !BOSS_KINDS.has(target.kind) &&
+      Math.random() < attacker.executeChance
+    ) {
+      this.onDeath(target);
+      return;
+    }
     let atk = attacker.atk;
     // 광폭화: HP 50% 이하 시 공격력 증가
     if (attacker.frenzyAtkPct > 0 && attacker.hp <= attacker.maxHp * 0.5) {

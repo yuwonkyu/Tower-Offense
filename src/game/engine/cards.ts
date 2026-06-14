@@ -64,6 +64,8 @@ export interface UnitMods {
   multishot: number;
   /** 치유량 증가 % (치유사 전용) */
   healBonusPct: number;
+  /** 일격 — 타격 시 즉사 확률 % (암살자 Lv5, 구조물·보스 제외) */
+  executeChance: number;
 }
 
 const MOD_KEYS: (keyof UnitMods)[] = [
@@ -87,6 +89,7 @@ const MOD_KEYS: (keyof UnitMods)[] = [
   'auraDmgReductionPct',
   'multishot',
   'healBonusPct',
+  'executeChance',
 ];
 
 export function zeroMods(): UnitMods {
@@ -118,6 +121,7 @@ export function zeroMods(): UnitMods {
     auraDmgReductionPct: 0,
     multishot: 0,
     healBonusPct: 0,
+    executeChance: 0,
   };
 }
 
