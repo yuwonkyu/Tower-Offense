@@ -246,7 +246,9 @@ export default function ShopScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.cardDesc}>평생 1회 결제 · 인터스티셜 광고 제거 + x4 배속 영구 해금</Text>
+          <Text style={styles.cardDesc}>
+            평생 1회 결제 · 광고 제거 + x4 배속 영구 + 카드 리롤 무제한(광고X) + 정산 획득 금화 2배
+          </Text>
           {!adFree && (
             <Pressable style={styles.pullBtn} onPress={() => handlePurchase('adFree')}>
               <Text style={styles.pullBtnText}>구매 (스텁)</Text>

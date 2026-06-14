@@ -73,6 +73,11 @@ interface BattleState {
   reset: () => void;
 }
 
+/** 프리미엄 패스 보유 시 정산 획득 금화 2배 (미보유 1배) */
+function premiumGoldMult(): number {
+  return useMonetizationStore.getState().adFree ? 2 : 1;
+}
+
 export const useBattleStore = create<BattleState>((set, get) => ({
   config: null,
   hero: HEROES[0],
@@ -166,7 +171,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
     if (timeLeft <= 0) {
       const elapsed = s.config ? s.config.timeLimit : 600;
-      const gold = calcGoldReward(s.config?.stage ?? 1, s.kills, false);
+      const gold = calcGoldReward(s.config?.stage ?? 1, s.kills, false) * premiumGoldMult();
       set({ timeLeft: 0, phase: 'defeat', clearTime: elapsed, goldEarned: gold });
       return;
     }
@@ -203,7 +208,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
     const isVictory = engine.result === 'victory';
     const goldEarned = isVictory
-      ? calcGoldReward(s.config?.stage ?? 1, engine.kills, true)
+      ? calcGoldReward(s.config?.stage ?? 1, engine.kills, true) * premiumGoldMult()
       : s.goldEarned;
 
     set({
@@ -246,7 +251,10 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   rerollCards: () => {
     const s = get();
-    if (s.phase !== 'cardPick' || s.rerollUsed || !s.engine) return;
+    if (s.phase !== 'cardPick' || !s.engine) return;
+    // 프리미엄 패스 = 리롤 무제한(광고X). 그 외엔 픽당 1회(광고)
+    const unlimited = useMonetizationStore.getState().adFree;
+    if (s.rerollUsed && !unlimited) return;
     const pickChoices = s.engine.cards.rollChoices(3);
     if (pickChoices.length === 0) return;
     set({ pickChoices, rerollUsed: true, pickTimeLeft: CARD_PICK_SECONDS });

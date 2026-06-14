@@ -311,8 +311,13 @@ export default function BattleScreen() {
           totalTime={CARD_PICK_SECONDS}
           level={heroLevel}
           onPick={pickCard}
-          onReroll={() => setAdKind('cardReroll')}
+          onReroll={() => {
+            // 프리미엄 패스 = 광고 없이 즉시 무제한 리롤, 그 외엔 광고 시청
+            if (adFree) useBattleStore.getState().rerollCards();
+            else setAdKind('cardReroll');
+          }}
           rerollUsed={rerollUsed}
+          rerollUnlimited={adFree}
         />
       )}
 
@@ -342,7 +347,7 @@ export default function BattleScreen() {
             }
           }}
           onExit={() => router.back()}
-          onDoubleReward={() => setAdKind('doubleReward')}
+          onDoubleReward={adFree ? undefined : () => setAdKind('doubleReward')}
           rewardDoubled={rewardDoubled}
           retryNeedsAd={phase === 'defeat' && !adFree}
         />
