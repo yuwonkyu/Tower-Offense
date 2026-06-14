@@ -161,6 +161,8 @@ export interface CombatEntity {
   healBonus: number;
   /** 일격 즉사 확률 0~1 (암살자 Lv5) */
   executeChance: number;
+  /** 피격 플래시 남은 시간 (초) — 타격감 연출, 렌더 전용 */
+  hitFlash: number;
   // 상태이상 런타임 (피격측)
   bleedLeft: number;
   bleedRate: number; // HP/초
@@ -200,6 +202,7 @@ function zeroProcFields() {
     multishot: 0,
     healBonus: 0,
     executeChance: 0,
+    hitFlash: 0,
     bleedLeft: 0,
     bleedRate: 0,
     burnLeft: 0,
@@ -291,6 +294,9 @@ const SHIELD_AURA_RADIUS = 12;
 const MULTISHOT_BONUS = 4;
 /** 일격(암살자 Lv5): 보스는 즉사 면역 → 대신 공격력 × 이 배수의 큰 피해 (방어 무시) */
 const EXECUTE_BOSS_MULT = 7;
+/** 피격 플래시 지속(초) — 타격감 연출 (렌더 전용) */
+const HIT_FLASH = 0.08;
+const TOWER_FLASH = 0.14;
 
 export type EngineResult = 'ongoing' | 'victory';
 
@@ -314,6 +320,8 @@ export class BattleEngine {
   readonly cards: CardSystem;
   /** 타워 무적 잔여 시간 (팔라딘 무적기) */
   invulnLeft = 0;
+  /** 타워 피격 플래시 남은 시간 (초) — 렌더 전용 */
+  towerFlash = 0;
   /** 영웅 스킬 남은 쿨타임 (초) — HUD가 동기화 */
   heroSkillCd = 0;
   /** 투신(스탯 버프) 잔여 시간 */
@@ -543,6 +551,7 @@ export class BattleEngine {
 
   /** 시각 이펙트 수명 갱신 (렌더 전용) */
   private updateEffects(dt: number) {
+    if (this.towerFlash > 0) this.towerFlash -= dt;
     if (this.effects.length === 0) return;
     for (const e of this.effects) e.life -= dt;
     this.effects = this.effects.filter((e) => e.life > 0);
@@ -909,6 +918,7 @@ export class BattleEngine {
     this.allyWaveReady = this.countSide('ally') - (this.hero.state !== 'dead' ? 1 : 0) >= ALLY_RALLY_SIZE;
     for (const e of this.entities) {
       if (e.state === 'dead') continue;
+      if (e.hitFlash > 0) e.hitFlash -= dt; // 피격 플래시 감쇠 (구조물 포함)
       if (isStructure(e.kind)) continue; // 구조물은 행동 없음 (트랩은 updateTraps)
 
       // 용맹 버프 만료 — 적용분 되돌림 (기절 중에도 진행)
@@ -1156,6 +1166,7 @@ export class BattleEngine {
   private damageTower(atk: number) {
     if (this.invulnLeft > 0) return; // 팔라딘 무적기
     this.towerHp = Math.max(0, this.towerHp - damage(atk, this.config.tower.def));
+    this.towerFlash = TOWER_FLASH; // 타워 피격 플래시
     // 팔라딘: 타워 HP 50% 이하 시 무적 5초 1회 자동 발동 (설계 09)
     if (
       this.enemyHero.id === 'paladin' &&
@@ -1421,6 +1432,7 @@ export class BattleEngine {
    */
   private hurt(target: CombatEntity, dmg: number): number {
     if (target.state === 'dead') return 0;
+    target.hitFlash = HIT_FLASH; // 타격감 연출
     // 피해감소(스펙) + 수호 오라 = 곱연산 합성
     if (target.dmgReduction > 0 || target.auraShield > 0) {
       dmg *= (1 - target.dmgReduction) * (1 - target.auraShield);
@@ -1451,6 +1463,7 @@ export class BattleEngine {
       } else {
         this.onDeath(target);
       }
+      this.spawnEffect(target.x, target.y, 4, 'rgba(255,80,80,0.95)', 0.35); // 일격 연출
       return;
     }
     let atk = attacker.atk;

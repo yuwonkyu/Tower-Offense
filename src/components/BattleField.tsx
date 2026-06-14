@@ -40,6 +40,9 @@ const PROJECTILE_COLOR = 'rgba(220,210,180,0.95)';
 
 const ALLY_STROKE = 'rgba(120,200,255,0.9)';
 
+/** 피격 순간 번쩍 (타격감) */
+const HIT_COLOR = 'rgba(255,255,255,0.95)';
+
 interface Props {
   config: StageConfig;
   /** 출전 영웅 (메타 스탯 반영된 정의) */
@@ -154,6 +157,15 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
           r={towerRadius * 0.45 * scale}
           color="rgba(220,80,80,0.5)"
         />
+        {/* 타워 피격 플래시 */}
+        {engine.towerFlash > 0 && (
+          <Circle
+            cx={towerX * scale}
+            cy={towerY * scale}
+            r={towerRadius * scale}
+            color="rgba(255,90,90,0.45)"
+          />
+        )}
 
         {/* 구조물: 성벽/바리케이트/트랩 */}
         {structures.map((e) => {
@@ -178,7 +190,7 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
               cx={e.x * scale}
               cy={e.y * scale}
               r={v.radius * scale}
-              color={v.color}
+              color={e.hitFlash > 0 ? HIT_COLOR : v.color}
             />
           );
         })}
@@ -192,7 +204,7 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
               cx={e.x * scale}
               cy={e.y * scale}
               r={v.radius * scale}
-              color={v.color}
+              color={e.hitFlash > 0 ? HIT_COLOR : v.color}
             />
           );
         })}
@@ -244,7 +256,13 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
           cx={hero.x * scale}
           cy={hero.y * scale}
           r={engine.field.heroRadius * scale}
-          color={heroDead ? 'rgba(120,120,140,0.5)' : 'rgba(100,180,255,0.9)'}
+          color={
+            heroDead
+              ? 'rgba(120,120,140,0.5)'
+              : hero.hitFlash > 0
+                ? HIT_COLOR
+                : 'rgba(100,180,255,0.9)'
+          }
         />
         <Circle
           cx={hero.x * scale}
