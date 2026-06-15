@@ -1,4 +1,14 @@
-import type { EnemyHeroDef, MiniBossId } from '@/game/types';
+import type { EnemyHeroDef, EnemyHeroId, MiniBossId } from '@/game/types';
+
+/**
+ * 적 영웅 종족별 시각 구분 (피드백 6 — 스테이지대별 적 영웅 식별).
+ * 전투 상단 엠블럼 + 홈 스테이지 셀 공용.
+ */
+export const ENEMY_HERO_VISUAL: Record<EnemyHeroId, { icon: string; color: string; tag: string }> = {
+  knight: { icon: '⚔️', color: '#e8c468', tag: '정통파' },
+  mage: { icon: '🔮', color: '#b06fe8', tag: '광역 마법' },
+  paladin: { icon: '👑', color: '#ffd700', tag: '엔드 보스' },
+};
 
 /**
  * 적 영웅 3종 (설계 09).

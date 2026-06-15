@@ -4,7 +4,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { hardStagesUnlocked, TOTAL_STAGES } from '@/data/stages';
-import { enemyHeroForStage } from '@/data/enemyHeroes';
+import { enemyHeroForStage, ENEMY_HERO_VISUAL } from '@/data/enemyHeroes';
 import { HEROES } from '@/data/heroes';
 import { TOWER_TABLE } from '@/data/towers';
 import { useProgressStore } from '@/store/progressStore';
@@ -63,6 +63,7 @@ export default function HomeScreen() {
           const locked = hard ? stage > hardUnlocked : stage > clearedStage + 1;
           const cleared = hard ? stage <= hardCleared : stage <= clearedStage;
           const hero = enemyHeroForStage(stage);
+          const visual = ENEMY_HERO_VISUAL[hero.id];
           const isBossStage = stage % 10 === 0;
           return (
             <Pressable
@@ -80,9 +81,13 @@ export default function HomeScreen() {
                 })
               }
             >
+              {/* 적 영웅 식별 아이콘 (스테이지대별 — 기사/마법사/팔라딘) */}
+              <Text style={styles.heroIcon}>{visual.icon}</Text>
               <Text style={[styles.cellText, locked && styles.lockedText]}>{stage}</Text>
               {cleared && <Text style={styles.clearedMark}>✓</Text>}
-              {isBossStage && <Text style={styles.bossLabel}>{hero.name}</Text>}
+              {isBossStage && (
+                <Text style={[styles.bossLabel, { color: visual.color }]}>{hero.name}</Text>
+              )}
             </Pressable>
           );
         }}
@@ -191,6 +196,13 @@ const styles = StyleSheet.create({
   lockedCell: { opacity: 0.35 },
   cellText: { fontSize: 16, fontWeight: '600', color: Colors.textMain },
   lockedText: { color: Colors.textDim },
+  heroIcon: {
+    position: 'absolute',
+    top: 3,
+    left: 4,
+    fontSize: 10,
+    opacity: 0.85,
+  },
   clearedMark: {
     position: 'absolute',
     top: 3,
@@ -199,7 +211,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(120,220,120,0.95)',
   },
-  bossLabel: { fontSize: 8, color: Colors.enemyHp, marginTop: 2 },
+  bossLabel: { fontSize: 8, marginTop: 2 },
   footer: {
     textAlign: 'center',
     color: Colors.textDim,

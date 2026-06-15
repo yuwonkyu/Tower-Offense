@@ -8,24 +8,18 @@ import { CardPickModal } from '@/components/CardPickModal';
 import { PauseMenuModal } from '@/components/PauseMenuModal';
 import { StageResultModal } from '@/components/StageResultModal';
 import { Colors } from '@/constants/theme';
-import { cardById } from '@/data/cards';
-import { ENEMY_HEROES } from '@/data/enemyHeroes';
-import type { EnemyHeroId } from '@/game/types';
+import { cardById, unitCardByUnit } from '@/data/cards';
+import { ENEMY_HEROES, ENEMY_HERO_VISUAL } from '@/data/enemyHeroes';
+import { META_HIDDEN_UNITS } from '@/data/enemyUnits';
+import type { UnitId } from '@/game/types';
 import type { BattleEngine } from '@/game/engine/engine';
 import { CARD_PICK_SECONDS, heroMetaExpForStage } from '@/game/formulas';
 import { useBattleStore } from '@/store/battleStore';
 import { useProgressStore } from '@/store/progressStore';
 import { useMonetizationStore } from '@/store/monetizationStore';
-import { TOTAL_STAGES } from '@/data/stages';
+import { EXTRA_UNLOCKS, TOTAL_STAGES } from '@/data/stages';
 
 const CARD_SLOTS = 8;
-
-/** 적 영웅 종족별 시각 구분 (피드백 6 — 10/20/30 보스 구분) */
-const ENEMY_HERO_VISUAL: Record<EnemyHeroId, { icon: string; color: string; tag: string }> = {
-  knight: { icon: '⚔️', color: '#e8c468', tag: '정통파' },
-  mage: { icon: '🔮', color: '#b06fe8', tag: '광역 마법' },
-  paladin: { icon: '👑', color: '#ffd700', tag: '엔드 보스' },
-};
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -80,6 +74,12 @@ export default function BattleScreen() {
 
   /** 일시정지 메뉴 (설정 버튼 — 피드백 10) */
   const [menuOpen, setMenuOpen] = useState(false);
+
+  /** 전투 시작 시점의 해금 목록 스냅샷 — 정산에서 "이번 클리어로 신규 해금" 판별용 */
+  const unlockedAtStart = useRef<UnitId[] | null>(null);
+  if (unlockedAtStart.current === null) {
+    unlockedAtStart.current = useProgressStore.getState().unlockedUnits;
+  }
 
   /**
    * 일시정지 게이트: 광고/메뉴 중에는 게임 루프(틱·카드 선택 타이머)를 멈춤.
@@ -160,6 +160,27 @@ export default function BattleScreen() {
   const expPct = expToNext > 0 ? exp / expToNext : 0;
   const skillReady = skillCooldown <= 0;
   const cardIds = Object.keys(pickedCards);
+
+  // 정산: 이번 클리어로 새로 해금된 유닛 이름 (메타 히든=마법사 진화형 제외)
+  const newlyUnlockedNames =
+    phase === 'victory'
+      ? Array.from(
+          new Set(
+            [config.unlocksUnit, ...(EXTRA_UNLOCKS[stageNum] ?? [])].filter(
+              (u): u is UnitId =>
+                !!u &&
+                !META_HIDDEN_UNITS.has(u) &&
+                !(unlockedAtStart.current ?? []).includes(u),
+            ),
+          ),
+        ).map((u) => unitCardByUnit(u)?.name ?? u)
+      : [];
+
+  // 정산: 이번 전투에서 픽한 카드 (이름 + 레벨)
+  const pickedSummary = cardIds.map((id) => ({
+    name: cardById(id)?.name ?? id,
+    level: pickedCards[id],
+  }));
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -336,6 +357,8 @@ export default function BattleScreen() {
             clearTime,
             finalLevel: heroLevel,
           }}
+          unlockedUnits={newlyUnlockedNames}
+          pickedCards={pickedSummary}
           onNextStage={() => {
             const next = Math.min(stageNum + 1, TOTAL_STAGES);
             router.replace({ pathname: '/battle', params: { stage: next, difficulty: diff } });

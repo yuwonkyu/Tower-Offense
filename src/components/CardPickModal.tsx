@@ -15,6 +15,9 @@ const KIND_STYLE: Record<CardKind, { bg: string; border: string; text: string }>
   global: { bg: Colors.cardGlobal, border: Colors.cardGlobalBorder, text: 'rgba(130,230,130,0.9)' },
 };
 
+/** 유닛 카드의 특수기술 발동 레벨 (Lv3·Lv5) — 도트/노트 강조용 */
+const SPECIAL_LEVELS = new Set([3, 5]);
+
 interface Props {
   /** 선택지 3장 */
   choices: CardDef[];
@@ -60,6 +63,8 @@ export function CardPickModal({
           const isRare = card.rarity === 'rare';
           const curLv = ownedLevels[card.id] ?? 0;
           const nextLv = curLv + 1;
+          // 유닛 카드가 이번 픽으로 특수기술(Lv3/5)을 발동시키는지
+          const unlocksSpecial = card.kind === 'unit' && SPECIAL_LEVELS.has(nextLv);
           return (
             <Pressable
               key={card.id}
@@ -67,9 +72,15 @@ export function CardPickModal({
                 styles.card,
                 { backgroundColor: kindStyle.bg, borderColor: kindStyle.border },
                 isRare && styles.cardRare,
+                unlocksSpecial && styles.cardSpecial,
               ]}
               onPress={() => onPick(card.id)}
             >
+              {unlocksSpecial && (
+                <View style={styles.specialBadge}>
+                  <Text style={styles.specialBadgeText}>✦ 특수기술</Text>
+                </View>
+              )}
               <View style={styles.cardHeader}>
                 <Text style={[styles.kindLabel, { color: kindStyle.text }]}>
                   {KIND_LABEL[card.kind]}
@@ -85,24 +96,30 @@ export function CardPickModal({
               </Text>
 
               <View style={styles.levelDots}>
-                {Array.from({ length: CARD_MAX_LEVEL }, (_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.dot,
-                      i < curLv && styles.dotOwned,
-                      i === nextLv - 1 && styles.dotNext,
-                    ]}
-                  />
-                ))}
+                {Array.from({ length: CARD_MAX_LEVEL }, (_, i) => {
+                  // 유닛 카드는 Lv3/5(=index 2/4)가 특수기술 발동 레벨
+                  const isSpecialLv = card.kind === 'unit' && SPECIAL_LEVELS.has(i + 1);
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.dot,
+                        isSpecialLv && styles.dotSpecial,
+                        i < curLv && (isSpecialLv ? styles.dotSpecialOwned : styles.dotOwned),
+                        i === nextLv - 1 && styles.dotNext,
+                      ]}
+                    />
+                  );
+                })}
                 <Text style={styles.levelText}>
                   {curLv > 0 ? `Lv.${curLv} → ${nextLv}` : `Lv.${nextLv}`}
                   {nextLv >= CARD_MAX_LEVEL ? ' MAX' : ''}
                 </Text>
               </View>
               {card.kind === 'unit' && card.levelNames && (
-                <Text style={styles.unitNote}>
-                  ▸ {card.levelNames[Math.min(nextLv, CARD_MAX_LEVEL) - 1]}
+                <Text style={[styles.unitNote, unlocksSpecial && styles.unitNoteSpecial]}>
+                  {unlocksSpecial ? '✦ ' : '▸ '}
+                  {card.levelNames[Math.min(nextLv, CARD_MAX_LEVEL) - 1]}
                 </Text>
               )}
             </Pressable>
@@ -168,6 +185,25 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
+  cardSpecial: {
+    borderColor: 'rgba(255,180,80,0.95)',
+    borderWidth: 2,
+    shadowColor: '#ffb450',
+    shadowOpacity: 0.7,
+    shadowRadius: 9,
+    elevation: 7,
+  },
+  specialBadge: {
+    position: 'absolute',
+    top: -8,
+    alignSelf: 'center',
+    backgroundColor: '#ffb450',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    zIndex: 1,
+  },
+  specialBadgeText: { fontSize: 9, fontWeight: '800', color: '#3a2400' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kindLabel: { fontSize: 10, fontWeight: '700' },
   rarityLabel: { fontSize: 10, color: Colors.textDim },
@@ -177,6 +213,7 @@ const styles = StyleSheet.create({
   cardDesc: { fontSize: 11, lineHeight: 15, color: Colors.textSub, flex: 1 },
 
   unitNote: { fontSize: 11, fontWeight: '600', color: 'rgba(230,200,90,0.9)' },
+  unitNoteSpecial: { color: 'rgba(255,190,90,0.98)', fontWeight: '800' },
   levelDots: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dot: {
     width: 8,
@@ -185,6 +222,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   dotOwned: { backgroundColor: 'rgba(220,190,80,0.85)' },
+  // 특수기술 레벨(Lv3/5): 미보유 시 주황 외곽선, 보유 시 채워진 주황
+  dotSpecial: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,180,80,0.85)',
+    backgroundColor: 'rgba(255,180,80,0.18)',
+  },
+  dotSpecialOwned: { backgroundColor: 'rgba(255,180,80,0.95)' },
   dotNext: {
     backgroundColor: 'rgba(120,200,255,0.9)',
     borderWidth: 1,

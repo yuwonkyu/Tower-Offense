@@ -26,6 +26,10 @@ interface Props {
   rewardDoubled?: boolean;
   /** 재시도에 광고 필요 (패배 시, 광고 제거 미구매) */
   retryNeedsAd?: boolean;
+  /** 이번 클리어로 신규 해금된 유닛 이름 */
+  unlockedUnits?: string[];
+  /** 이번 전투에서 픽한 카드 (이름 + 레벨) */
+  pickedCards?: { name: string; level: number }[];
 }
 
 function formatTime(sec: number): string {
@@ -51,6 +55,8 @@ export function StageResultModal({
   onDoubleReward,
   rewardDoubled,
   retryNeedsAd,
+  unlockedUnits = [],
+  pickedCards = [],
 }: Props) {
   const { victory, stage, kills, deaths, totalExp, goldEarned, clearTime, finalLevel } = result;
 
@@ -96,6 +102,29 @@ export function StageResultModal({
               </Pressable>
             )}
           </View>
+
+          {/* 신규 해금 유닛 배너 */}
+          {victory && unlockedUnits.length > 0 && (
+            <View style={styles.unlockBanner}>
+              <Text style={styles.unlockTitle}>🔓 신규 유닛 해금</Text>
+              <Text style={styles.unlockNames}>{unlockedUnits.join(' · ')}</Text>
+            </View>
+          )}
+
+          {/* 이번 전투 카드 빌드 */}
+          {pickedCards.length > 0 && (
+            <View style={styles.cardsSection}>
+              <Text style={styles.cardsLabel}>이번 빌드 ({pickedCards.length})</Text>
+              <View style={styles.cardChips}>
+                {pickedCards.map((c, i) => (
+                  <View key={`${c.name}-${i}`} style={styles.cardChip}>
+                    <Text style={styles.cardChipName}>{c.name}</Text>
+                    <Text style={styles.cardChipLv}>Lv.{c.level}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* 버튼 */}
           <View style={styles.btnRow}>
@@ -196,6 +225,42 @@ const styles = StyleSheet.create({
   },
   doubleBtnUsed: { opacity: 0.4 },
   doubleBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gold },
+
+  unlockBanner: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(100,200,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(120,200,255,0.45)',
+    alignItems: 'center',
+    gap: 2,
+  },
+  unlockTitle: { fontSize: 12, fontWeight: '700', color: 'rgba(140,200,255,0.95)' },
+  unlockNames: { fontSize: 14, fontWeight: '800', color: '#fff' },
+
+  cardsSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    gap: 6,
+  },
+  cardsLabel: { fontSize: 11, color: Colors.textDim, fontWeight: '600' },
+  cardChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  cardChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  cardChipName: { fontSize: 11, color: Colors.textSub },
+  cardChipLv: { fontSize: 10, fontWeight: '700', color: 'rgba(120,200,255,0.9)' },
 
   btnRow: {
     flexDirection: 'row',
