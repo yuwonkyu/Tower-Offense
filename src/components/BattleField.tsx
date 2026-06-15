@@ -1,4 +1,4 @@
-import { Canvas, Circle } from '@shopify/react-native-skia';
+import { Canvas, Circle, Group } from '@shopify/react-native-skia';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import {
@@ -234,9 +234,33 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
           />
         ))}
 
-        {/* 스킬/광역 발동 연출: 퍼지며 사라지는 링 (설계 연출) */}
+        {/* 스킬/광역 연출 — 경고(텔레그래프)는 고정 반경 위험존, 타격은 퍼지는 링 */}
         {engine.effects.map((fx) => {
-          const progress = 1 - fx.life / fx.maxLife; // 0→1
+          const progress = 1 - fx.life / fx.maxLife; // 0→1 (경고: 임박할수록 1)
+          if (fx.warning) {
+            // 시전 경고: 고정 반경 위험존 — 외곽선 + 점점 진해지는 내부 (임박 신호)
+            return (
+              <Group key={`fx${fx.id}`}>
+                <Circle
+                  cx={fx.x * scale}
+                  cy={fx.y * scale}
+                  r={fx.maxRadius * scale}
+                  color={fx.color}
+                  opacity={0.12 + progress * 0.33}
+                />
+                <Circle
+                  cx={fx.x * scale}
+                  cy={fx.y * scale}
+                  r={fx.maxRadius * scale}
+                  color={fx.color}
+                  style="stroke"
+                  strokeWidth={2.5}
+                  opacity={0.5 + progress * 0.5}
+                />
+              </Group>
+            );
+          }
+          // 타격: 퍼지며 사라지는 링
           return (
             <Circle
               key={`fx${fx.id}`}

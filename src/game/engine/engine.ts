@@ -245,6 +245,18 @@ export interface VisualEffect {
   life: number;
   maxLife: number;
   color: string;
+  /** true = 시전 경고(텔레그래프): 고정 반경 위험 표시(점점 진해짐). false/미지정 = 퍼지는 타격 링 */
+  warning?: boolean;
+}
+
+/** 적 영웅 스킬 예약 타격 — 텔레그래프(경고) 후 delay 경과 시 광역 피해 발동 */
+interface PendingStrike {
+  delay: number;
+  x: number;
+  y: number;
+  radius: number;
+  dmg: number;
+  color: string;
 }
 
 /** 적 동시 생존 캡 — 붕괴 구간 동안 무한 적립된 주둔군이 공략 불가가 되는 것 방지 (+모바일 성능) */
@@ -259,6 +271,9 @@ const ALLY_SPAWN_RATE_PER_CARD = 1.0;
 const AGGRO_BONUS = 14;
 /** 영웅 탐지 범위 — 근접 영웅도 원거리 포격에 대응하도록 넓게 */
 const HERO_AGGRO = 35;
+/** 적 영웅 스킬 시전 경고 시간 (초) — 텔레그래프 후 타격 (P2 위협 가독성) */
+const METEOR_CAST = 0.9;
+const SWEEP_CAST = 0.7;
 /** 적 방어 반경: 타워에서 이 거리 안의 아군만 추격 (방어 유닛 운용 — 설계 10) */
 const ENEMY_DEFEND_RADIUS = 60;
 /** 적 대기 링: 추격 대상 없으면 타워 주변으로 귀환 */
@@ -308,6 +323,8 @@ export class BattleEngine {
   projectiles: Projectile[] = [];
   /** 시각 이펙트 (스킬 발동 링) — BattleField가 렌더 */
   effects: VisualEffect[] = [];
+  /** 적 영웅 스킬 예약 타격 (텔레그래프 후 발동) */
+  private pendingStrikes: PendingStrike[] = [];
   hero: CombatEntity;
   towerHp: number;
   kills = 0;
@@ -545,6 +562,7 @@ export class BattleEngine {
     this.updateBossAppearances();
     this.updateRevive(dt);
     this.updateEnemyHero(dt);
+    this.updatePendingStrikes(dt);
     this.updateAuras();
     this.act(dt);
     this.updateProjectiles(dt);
@@ -564,6 +582,28 @@ export class BattleEngine {
   /** 스킬/광역 발동 위치에 퍼지는 링 이펙트 추가 */
   private spawnEffect(x: number, y: number, maxRadius: number, color: string, life = 0.55) {
     this.effects.push({ id: this.nextId++, x, y, maxRadius, life, maxLife: life, color });
+  }
+
+  /** 적 영웅 스킬 예약: 경고 텔레그래프 후 delay 경과 시 광역 피해 (위협 가독성) */
+  private queueStrike(x: number, y: number, radius: number, dmg: number, delay: number, color: string) {
+    // 경고 링: delay 동안 고정 반경으로 점점 진해지는 위험 표시
+    this.effects.push({
+      id: this.nextId++, x, y, maxRadius: radius, life: delay, maxLife: delay,
+      color: 'rgba(255,70,50,0.85)', warning: true,
+    });
+    this.pendingStrikes.push({ delay, x, y, radius, dmg, color });
+  }
+
+  /** 예약된 적 영웅 스킬 타격 처리 — delay 경과 시 areaDamage + 타격 이펙트 */
+  private updatePendingStrikes(dt: number) {
+    if (this.pendingStrikes.length === 0) return;
+    for (const s of this.pendingStrikes) s.delay -= dt;
+    const ready = this.pendingStrikes.filter((s) => s.delay <= 0);
+    this.pendingStrikes = this.pendingStrikes.filter((s) => s.delay > 0);
+    for (const s of ready) {
+      this.areaDamage(s.x, s.y, s.radius, s.dmg);
+      this.spawnEffect(s.x, s.y, s.radius, s.color);
+    }
   }
 
   // ── 생성 ──────────────────────────────────────────────
@@ -1391,22 +1431,21 @@ export class BattleEngine {
       }
     }
 
-    // 스킬 (타깃이 있을 때만 발동)
+    // 스킬: 경고 텔레그래프(시전 딜레이) 후 광역 타격 — 위협 가독성 (P2)
     this.enemyHeroSkillCd -= dt;
     if (this.enemyHeroSkillCd <= 0) {
       if (def.id === 'mage') {
-        // 필드 랜덤 메테오 5발: 발당 공격력 200%, 반경 3
+        // 필드 랜덤 메테오 5발: 발당 공격력 200%, 반경 3 — 0.9초 낙하 경고
         const allies = this.entities.filter((c) => c.side === 'ally' && c.state !== 'dead');
         if (allies.length > 0) {
           for (let i = 0; i < 5; i++) {
             const at = allies[Math.floor(Math.random() * allies.length)];
-            this.areaDamage(at.x, at.y, 3, this.enemyHeroAtk * 2);
-            this.spawnEffect(at.x, at.y, 3, 'rgba(255,90,90,0.95)'); // 메테오 낙하 지점
+            this.queueStrike(at.x, at.y, 3, this.enemyHeroAtk * 2, METEOR_CAST, 'rgba(255,90,90,0.95)');
           }
           this.enemyHeroSkillCd = this.enemyHeroSkillCdMax;
         }
       } else {
-        // 기사 휩쓸기 (반경 5, 120%) / 팔라딘 신성 광역 (반경 6, 180%)
+        // 기사 휩쓸기 (반경 5, 120%) / 팔라딘 신성 광역 (반경 6, 180%) — 0.7초 시전 경고
         const radius = towerRadius + (def.id === 'paladin' ? 6 : 5);
         const ratio = def.id === 'paladin' ? 1.8 : 1.2;
         const hasTarget = this.entities.some(
@@ -1416,8 +1455,7 @@ export class BattleEngine {
             Math.hypot(c.x - towerX, c.y - towerY) <= radius,
         );
         if (hasTarget) {
-          this.areaDamage(towerX, towerY, radius, this.enemyHeroAtk * ratio);
-          this.spawnEffect(towerX, towerY, radius, 'rgba(255,120,60,0.9)'); // 성 주변 휩쓸기/신성 광역
+          this.queueStrike(towerX, towerY, radius, this.enemyHeroAtk * ratio, SWEEP_CAST, 'rgba(255,120,60,0.9)');
           this.enemyHeroSkillCd = this.enemyHeroSkillCdMax;
         }
       }
