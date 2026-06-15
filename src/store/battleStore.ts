@@ -5,10 +5,11 @@ import type { CardDef, HeroDef, StageConfig, StageDifficulty } from '@/game/type
 import type { BattleEngine } from '@/game/engine/engine';
 import { getStageConfig } from '@/data/stages';
 import { HEROES } from '@/data/heroes';
+import { rollResourceReward } from '@/data/cards';
 import { calcGoldReward, useProgressStore } from '@/store/progressStore';
 import { useMonetizationStore } from '@/store/monetizationStore';
 
-export type BattlePhase = 'ready' | 'running' | 'cardPick' | 'victory' | 'defeat';
+export type BattlePhase = 'ready' | 'running' | 'cardPick' | 'resourceNotice' | 'victory' | 'defeat';
 
 interface BattleState {
   config: StageConfig | null;
@@ -53,6 +54,10 @@ interface BattleState {
   x4Unlocked: boolean;
   /** 승리 보상 2배 적용 여부 (광고, 1회) */
   rewardDoubled: boolean;
+  /** 카드 풀 소진 → 재화 자동 습득 모드 진입 여부 (안내 1회 후 활성) */
+  resourceAutoActive: boolean;
+  /** 안내 모달 표시용 직전 자동 습득 누적 (gold/diamonds) */
+  resourceGain: { gold: number; diamonds: number };
 
   startStage: (stage: number, difficulty?: StageDifficulty) => void;
   /** 매 프레임: 타이머/쿨다운 진행 (dt = 실제 경과 초) */
@@ -61,6 +66,8 @@ interface BattleState {
   syncFromEngine: (engine: BattleEngine) => void;
   /** 카드 선택 (cardPick 페이즈에서만) */
   pickCard: (cardId: string) => void;
+  /** 재화 자동 습득 안내 닫기 → running 복귀 */
+  dismissResourceNotice: () => void;
   /** 카드 선택지 리롤 (광고 보상) — 픽당 1회 */
   rerollCards: () => void;
   /** 배속 순환. x4 진입이 잠겨 있으면 'needsX4Ad' 반환 (광고 유도) */
@@ -78,6 +85,27 @@ function settlementGoldMult(config: StageConfig | null): number {
   const premium = useMonetizationStore.getState().adFree ? 2 : 1;
   const hard = config?.difficulty === 'hard' ? HARD_MODE.rewardMultiplier : 1;
   return premium * hard;
+}
+
+/**
+ * 카드 풀 고갈 상태에서 쌓인 선택권(pendingPicks)을 모두 재화로 환산·즉시 지급.
+ * 선택 UI 없이 자동 습득 (잉여 레벨업 → 골드/다이아). 누적 지급액 반환.
+ */
+function drainPendingResources(engine: BattleEngine): { gold: number; diamonds: number } {
+  let gold = 0;
+  let diamonds = 0;
+  while (engine.pendingPicks > 0) {
+    const r = rollResourceReward();
+    gold += r.gold;
+    diamonds += r.diamonds;
+    engine.pendingPicks--;
+  }
+  if (gold > 0 || diamonds > 0) {
+    const prog = useProgressStore.getState();
+    if (gold > 0) prog.addGold(gold);
+    if (diamonds > 0) prog.addDiamonds(diamonds);
+  }
+  return { gold, diamonds };
 }
 
 export const useBattleStore = create<BattleState>((set, get) => ({
@@ -107,6 +135,8 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   rerollUsed: false,
   x4Unlocked: false,
   rewardDoubled: false,
+  resourceAutoActive: false,
+  resourceGain: { gold: 0, diamonds: 0 },
 
   startStage: (stage, difficulty = 'normal') => {
     const config = getStageConfig(stage, difficulty);
@@ -143,6 +173,8 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       pickTimeLeft: 0,
       rerollUsed: false,
       rewardDoubled: false,
+      resourceAutoActive: false,
+      resourceGain: { gold: 0, diamonds: 0 },
       // x4Unlocked는 세션(앱 실행) 단위 유지 — 스테이지마다 리셋하지 않음
     });
   },
@@ -200,7 +232,19 @@ export const useBattleStore = create<BattleState>((set, get) => ({
         });
         return;
       }
-      engine.pendingPicks = 0; // 풀 고갈 — 선택 생략 (TODO: 재화 카드)
+      // 풀 고갈(모든 카드 만렙) → 재화 자동 습득. 최초 1회만 안내 카드, 이후 조용히 지급
+      const gain = drainPendingResources(engine);
+      if (!s.resourceAutoActive && (gain.gold > 0 || gain.diamonds > 0)) {
+        set({
+          phase: 'resourceNotice',
+          resourceAutoActive: true,
+          resourceGain: gain,
+          heroLevel: engine.level,
+          exp: engine.expInLevel,
+          expToNext: engine.expToNext,
+        });
+        return;
+      }
     }
 
     // 영웅 사망 감지: reviveLeft가 새로 생겼으면 사망 1회
@@ -236,14 +280,6 @@ export const useBattleStore = create<BattleState>((set, get) => ({
     const engine = s.engine;
     if (!engine || s.phase !== 'cardPick') return;
 
-    // 재화 카드(풀 고갈 시 등장): 즉시 골드/다이아 지급 — 보유 슬롯엔 들어가지 않음
-    const chosen = s.pickChoices.find((c) => c.id === cardId);
-    if (chosen?.kind === 'resource' && chosen.reward) {
-      const prog = useProgressStore.getState();
-      if (chosen.reward.gold) prog.addGold(chosen.reward.gold);
-      if (chosen.reward.diamonds) prog.addDiamonds(chosen.reward.diamonds);
-    }
-
     engine.pickCard(cardId);
     const pickedCards = Object.fromEntries(engine.cards.owned);
 
@@ -254,9 +290,19 @@ export const useBattleStore = create<BattleState>((set, get) => ({
         set({ pickedCards, pickChoices, pickTimeLeft: CARD_PICK_SECONDS, rerollUsed: false });
         return;
       }
-      engine.pendingPicks = 0;
+      // 연속 선택 중 풀 고갈 → 재화 자동 습득 (최초 1회 안내)
+      const gain = drainPendingResources(engine);
+      if (!s.resourceAutoActive && (gain.gold > 0 || gain.diamonds > 0)) {
+        set({ pickedCards, phase: 'resourceNotice', resourceAutoActive: true, resourceGain: gain });
+        return;
+      }
     }
     set({ pickedCards, phase: 'running', pickChoices: [] });
+  },
+
+  dismissResourceNotice: () => {
+    if (get().phase !== 'resourceNotice') return;
+    set({ phase: 'running' });
   },
 
   rerollCards: () => {
@@ -300,6 +346,13 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   },
 
   reset: () => {
-    set({ config: null, phase: 'ready', engine: null, pickChoices: [] });
+    set({
+      config: null,
+      phase: 'ready',
+      engine: null,
+      pickChoices: [],
+      resourceAutoActive: false,
+      resourceGain: { gold: 0, diamonds: 0 },
+    });
   },
 }));

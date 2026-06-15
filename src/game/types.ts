@@ -117,7 +117,7 @@ export interface EnemyHeroDef {
   growthPerStage: { hp: number; atk: number; skillCdr: number; spawnRate: number };
 }
 
-export type CardKind = 'unit' | 'trait' | 'global' | 'resource';
+export type CardKind = 'unit' | 'trait' | 'global';
 export type CardRarity = 'common' | 'rare';
 
 /** 카드 1레벨당 효과 수치 묶음 (예: { hpPct: 8 } / { chance: 12, dmgPct: 2 }) */
@@ -139,8 +139,6 @@ export interface CardDef {
   evolve?: { atLevel: number; unitId: UnitId }[];
   /** 타워/구조물 미적용 여부 (출혈/화염 등 % 피해형) */
   excludesTower?: boolean;
-  /** 재화 카드(kind='resource') 즉시 지급 보상 */
-  reward?: { gold?: number; diamonds?: number };
 }
 
 export type StageDifficulty = 'normal' | 'hard';

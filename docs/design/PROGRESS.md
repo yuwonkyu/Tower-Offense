@@ -239,14 +239,16 @@
 - [ ] **이팩트 재작업**: Skia 링/플래시 → 스프라이트 기반 이팩트로 교체 예정
 - [ ] **온보딩 튜토리얼**: 첫 스테이지 가이드 (카드 선택 설명 / 영웅 스킬 안내)
 
-### 버그 수정 (2026-06-15)
+### 버그 수정 + UX (2026-06-15)
 
-- [x] **카드 풀 고갈 → 재화 카드 미작동** (폰 테스트 제보): 8슬롯 전부 만렙 후 잉여 선택권이
+- [x] **카드 풀 고갈 → 재화 미지급** (폰 테스트 제보): 8슬롯 전부 만렙 후 잉여 선택권이
   골드/다이아로 전환돼야 하는데 `rollChoices`가 빈 배열 반환 → 픽 생략(TODO 스텁이었음)
-  - `rollResourceCard()` 신설 (골드 95% / 다이아 5%, 검증: 10k롤 = 5.0%) — 풀 고갈 시 슬롯 패딩
-  - 픽 시 `progressStore.addGold/addDiamonds` 지급 (보유 슬롯 미점유, 무한루프 없음)
-  - `CardKind`에 `'resource'` 추가 + `CardDef.reward` + CardPickModal 보상 칩 렌더
-  - 시뮬 확인: 스테이지30 만렙 런에서 "골드 카드×14" 정상 픽
+- [x] **재화는 "선택"이 아닌 "자동 습득"으로** (유저 요청 — 게임플레이 편의):
+  - 풀 소진 시 **안내 모달 1회**(`ResourceNoticeModal`) → 이후 레벨업마다 재화 **자동 지급**
+  - `battleStore`: `resourceNotice` 페이즈 + `drainPendingResources()`(잉여 선택권→재화 환산·즉시 지급)
+    + `resourceAutoActive`(안내 1회 게이트) / `dismissResourceNotice`
+  - `rollResourceReward()` 골드 95% / 다이아 5% (검증: 10k = 5.0%), `progressStore` 지급
+  - 카드 선택 UI/`'resource'` CardKind는 폐기(자동 습득이라 불필요) — 픽 흐름 단순화
 
 ### 기술 부채
 

@@ -6,6 +6,7 @@ import { AdStubModal } from '@/components/AdStubModal';
 import { BattleField } from '@/components/BattleField';
 import { CardPickModal } from '@/components/CardPickModal';
 import { PauseMenuModal } from '@/components/PauseMenuModal';
+import { ResourceNoticeModal } from '@/components/ResourceNoticeModal';
 import { StageResultModal } from '@/components/StageResultModal';
 import { Colors } from '@/constants/theme';
 import { cardById, unitCardByUnit } from '@/data/cards';
@@ -56,6 +57,8 @@ export default function BattleScreen() {
   const pickTimeLeft = useBattleStore((s) => s.pickTimeLeft);
   const rerollUsed = useBattleStore((s) => s.rerollUsed);
   const rewardDoubled = useBattleStore((s) => s.rewardDoubled);
+  const resourceGain = useBattleStore((s) => s.resourceGain);
+  const dismissResourceNotice = useBattleStore((s) => s.dismissResourceNotice);
   const startStage = useBattleStore((s) => s.startStage);
   const pickCard = useBattleStore((s) => s.pickCard);
   const cycleSpeed = useBattleStore((s) => s.cycleSpeed);
@@ -342,6 +345,11 @@ export default function BattleScreen() {
           rerollUsed={rerollUsed}
           rerollFree={adFree}
         />
+      )}
+
+      {/* ── 카드 풀 소진 안내 (1회) → 이후 재화 자동 습득 ── */}
+      {phase === 'resourceNotice' && (
+        <ResourceNoticeModal gain={resourceGain} onConfirm={dismissResourceNotice} />
       )}
 
       {/* ── 스테이지 정산 ── */}
