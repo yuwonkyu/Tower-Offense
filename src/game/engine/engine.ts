@@ -460,13 +460,15 @@ export class BattleEngine {
 
       const isNoeul = this.heroDef.id === 'noeul';
       if (isNoeul) {
-        // 피노을: 지정 위치로 도약
+        // 피노을: 지정 위치로 도약 — 출발→도착 경로 잔상 연출
+        this.spawnLeapTrail(h.x, h.y, target.x, target.y);
         h.x = target.x;
         h.y = target.y;
       }
       const radius = isNoeul ? 4 : 6; // 살소나기는 더 넓은 화살비
       // 발동 위치 링: 노을=보라(도약/암살), 미르=하늘색(화살비)
       this.spawnEffect(target.x, target.y, radius, isNoeul ? 'rgba(200,90,230,0.95)' : 'rgba(150,210,255,0.95)');
+      if (!isNoeul) this.spawnArrowRain(target.x, target.y, radius); // 살소나기 화살비
       const atk = h.atk * ratio;
       for (const c of this.entities) {
         if (c.side !== 'enemy' || c.state === 'dead') continue;
@@ -582,6 +584,27 @@ export class BattleEngine {
   /** 스킬/광역 발동 위치에 퍼지는 링 이펙트 추가 */
   private spawnEffect(x: number, y: number, maxRadius: number, color: string, life = 0.55) {
     this.effects.push({ id: this.nextId++, x, y, maxRadius, life, maxLife: life, color });
+  }
+
+  /** 피노을 도약 잔상: 출발→도착 경로에 작은 링 잔상 (도약 시각화) */
+  private spawnLeapTrail(x1: number, y1: number, x2: number, y2: number) {
+    const color = 'rgba(200,90,230,0.8)';
+    this.spawnEffect(x1, y1, 4, color, 0.4); // 출발 지점 잔상
+    const steps = 5;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / (steps + 1);
+      this.spawnEffect(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, 1.6, color, 0.18 + t * 0.2);
+    }
+  }
+
+  /** 살소나기 화살비: 범위 내 흩뿌리는 작은 낙하 링 (화살비 시각화) */
+  private spawnArrowRain(cx: number, cy: number, radius: number) {
+    const color = 'rgba(150,210,255,0.9)';
+    for (let i = 0; i < 8; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * radius; // 균일 분포
+      this.spawnEffect(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 1.3, color, 0.3 + Math.random() * 0.3);
+    }
   }
 
   /** 적 영웅 스킬 예약: 경고 텔레그래프 후 delay 경과 시 광역 피해 (위협 가독성) */

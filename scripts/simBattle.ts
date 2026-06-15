@@ -1,13 +1,45 @@
 /**
  * 헤드리스 전투 시뮬레이션 — 밸런스 검증용.
- * 실행: npx tsx scripts/simBattle.ts [스테이지]
+ * 실행: npx tsx scripts/simBattle.ts [스테이지] [메타레벨]
+ *   - 메타레벨 생략/0 = 초기 스탯 (신규 가입 상태)
+ *   - 메타레벨 N = 전 유닛 강화 Lv.N(+ (N-1)%) + 신규유닛 전부 해금 + 영웅 스탯 +N% 투자
+ *     (예: 스테이지 20+ 진척 플레이어 ≈ 메타 15~20)
  */
 import { BattleEngine, makeFieldLayout, unitDef } from '../src/game/engine/engine';
 import { getStageConfig } from '../src/data/stages';
+import { unitUpgradeStatBonus } from '../src/game/formulas';
+import { BASE_UNITS } from '../src/data/units';
+import { NEW_ENEMY_UNITS } from '../src/data/enemyUnits';
+import { HEROES } from '../src/data/heroes';
+import type { HeroDef, UnitId } from '../src/game/types';
 
 const stage = Number(process.argv[2]) || 1;
+const metaLevel = Number(process.argv[3]) || 0;
 const config = getStageConfig(stage);
-const engine = new BattleEngine(config, makeFieldLayout(1.6));
+
+// ── 메타 성장 프로필 (스테이지 20+ 진척 플레이어 근사) ──
+let heroDef: HeroDef = HEROES[0];
+const unitMetaBonuses: Record<string, number> = {};
+let unlockedUnits: UnitId[] = [];
+if (metaLevel > 0) {
+  const bonus = unitUpgradeStatBonus(metaLevel); // 전 유닛 동일 강화로 근사
+  for (const u of [...BASE_UNITS, ...NEW_ENEMY_UNITS]) unitMetaBonuses[u.id] = bonus;
+  unlockedUnits = NEW_ENEMY_UNITS.map((u) => u.id); // 신규 유닛 전부 해금
+  const s = heroDef.stats; // 영웅 투자: 전 스탯 +metaLevel%
+  const f = 1 + metaLevel * 0.01;
+  heroDef = {
+    ...heroDef,
+    stats: {
+      ...s,
+      atk: Math.round(s.atk * f),
+      def: Math.round(s.def * f),
+      hp: Math.round(s.hp * f),
+      atkSpeed: +(s.atkSpeed * f).toFixed(3),
+    },
+  };
+}
+
+const engine = new BattleEngine(config, makeFieldLayout(1.6), heroDef, unitMetaBonuses, unlockedUnits);
 
 const DT = 1 / 30;
 let elapsed = 0;
@@ -96,7 +128,10 @@ function autoPick() {
   }
 }
 
-console.log(`── 스테이지 ${stage} 시뮬레이션 (타워 ${config.tower.hp.toLocaleString()} HP / 방어 ${config.tower.def}) ──`);
+console.log(
+  `── 스테이지 ${stage} 시뮬레이션 (타워 ${config.tower.hp.toLocaleString()} HP / 방어 ${config.tower.def})` +
+    `${metaLevel > 0 ? ` · 메타 Lv.${metaLevel} (유닛 +${Math.round(unitUpgradeStatBonus(metaLevel) * 100)}% / 영웅 +${metaLevel}%)` : ' · 초기 스탯'} ──`,
+);
 
 while (elapsed < config.timeLimit && engine.result === 'ongoing') {
   autoPick();
