@@ -208,14 +208,30 @@ export function evolvedUnitId(card: CardDef, level: number): string {
   return result;
 }
 
-/** 카드 풀 고갈 시 등장하는 재화 카드 */
-export const RESOURCE_CARDS = [
-  { id: 'res_gold', name: '골드 카드', description: '즉시 골드 획득' },
-  { id: 'res_diamond', name: '다이아 카드', description: '낮은 확률 등장, 즉시 다이아 획득' },
-] as const;
+/**
+ * 카드 풀 고갈 시 등장하는 재화 카드 (모든 슬롯 만렙 후 잉여 선택권 → 골드/다이아 전환).
+ * 풀에는 미포함(ALL_CARDS 제외) — rollResourceCard로 즉석 생성. 보유 슬롯 차지 안 함.
+ */
+export const RESOURCE_REWARD = { gold: 100, diamonds: 1 } as const;
 
-/** MAX 도달 시 추가 카드 선택권 1회, 매 선택 5% 확률 보너스 뽑기 */
+/** MAX 도달 시 추가 카드 선택권 1회, 재화 카드 1장당 다이아 등장 확률 5% (그 외 골드) */
 export const CARD_BONUS = { maxLevelExtraPick: 1, bonusPickChance: 0.05 } as const;
+
+/** 재화 카드 1장 생성 — 5% 다이아, 95% 골드. seq = 같은 선택지 내 고유 키 보장용 */
+export function rollResourceCard(seq: number): CardDef {
+  const isDiamond = Math.random() < CARD_BONUS.bonusPickChance;
+  return isDiamond
+    ? {
+        id: `res_diamond_${seq}`, kind: 'resource', rarity: 'rare', name: '다이아 카드',
+        description: `즉시 다이아 +${RESOURCE_REWARD.diamonds} 획득 (희귀)`,
+        levels: [], reward: { diamonds: RESOURCE_REWARD.diamonds },
+      }
+    : {
+        id: `res_gold_${seq}`, kind: 'resource', rarity: 'common', name: '골드 카드',
+        description: `즉시 골드 +${RESOURCE_REWARD.gold} 획득`,
+        levels: [], reward: { gold: RESOURCE_REWARD.gold },
+      };
+}
 
 export function cardById(id: string): CardDef | undefined {
   return ALL_CARDS.find((c) => c.id === id);

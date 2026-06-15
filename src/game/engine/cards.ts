@@ -5,6 +5,7 @@ import {
   evolvedUnitId,
   GLOBAL_CARDS,
   REQUIRES_UNLOCK,
+  rollResourceCard,
   unitCardByUnit,
 } from '@/data/cards';
 import type { CardDef, UnitId } from '@/game/types';
@@ -220,10 +221,14 @@ export class CardSystem {
       const rares = pool.filter((c) => c.rarity === 'rare' && !used.has(c.id));
       let bucket = Math.random() < rareWeight ? rares : commons;
       if (bucket.length === 0) bucket = bucket === rares ? commons : rares;
-      if (bucket.length === 0) break; // 풀 고갈 — TODO: 골드/다이아 재화 카드
+      if (bucket.length === 0) break; // 일반 풀 고갈 — 아래에서 재화 카드로 채움
       const pick = bucket[Math.floor(Math.random() * bucket.length)];
       out.push(pick);
       used.add(pick.id);
+    }
+    // 풀 고갈로 슬롯이 비면 재화 카드(골드/다이아)로 채움 (잉여 선택권 → 재화 전환)
+    while (out.length < count) {
+      out.push(rollResourceCard(out.length));
     }
     return out;
   }

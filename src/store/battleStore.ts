@@ -236,6 +236,14 @@ export const useBattleStore = create<BattleState>((set, get) => ({
     const engine = s.engine;
     if (!engine || s.phase !== 'cardPick') return;
 
+    // 재화 카드(풀 고갈 시 등장): 즉시 골드/다이아 지급 — 보유 슬롯엔 들어가지 않음
+    const chosen = s.pickChoices.find((c) => c.id === cardId);
+    if (chosen?.kind === 'resource' && chosen.reward) {
+      const prog = useProgressStore.getState();
+      if (chosen.reward.gold) prog.addGold(chosen.reward.gold);
+      if (chosen.reward.diamonds) prog.addDiamonds(chosen.reward.diamonds);
+    }
+
     engine.pickCard(cardId);
     const pickedCards = Object.fromEntries(engine.cards.owned);
 

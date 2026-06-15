@@ -11,11 +11,12 @@ interface Props {
   onExit: () => void;
 }
 
-const KIND_LABEL: Record<CardKind, string> = { unit: '유닛', trait: '특성', global: '글로벌' };
+const KIND_LABEL: Record<CardKind, string> = { unit: '유닛', trait: '특성', global: '글로벌', resource: '재화' };
 const KIND_COLOR: Record<CardKind, string> = {
   unit: 'rgba(230,200,90,0.95)',
   trait: 'rgba(210,210,230,0.9)',
   global: 'rgba(130,230,130,0.9)',
+  resource: 'rgba(241,196,15,0.95)',
 };
 
 /** 카드 효과 키 → 한글 라벨 (수치 표시용) */

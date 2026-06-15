@@ -7,12 +7,14 @@ const KIND_LABEL: Record<CardKind, string> = {
   unit: '유닛',
   trait: '특성',
   global: '글로벌',
+  resource: '재화',
 };
 
 const KIND_STYLE: Record<CardKind, { bg: string; border: string; text: string }> = {
   unit: { bg: Colors.cardUnit, border: Colors.cardUnitBorder, text: 'rgba(230,200,90,0.95)' },
   trait: { bg: Colors.cardTrait, border: Colors.cardTraitBorder, text: 'rgba(210,210,230,0.9)' },
   global: { bg: Colors.cardGlobal, border: Colors.cardGlobalBorder, text: 'rgba(130,230,130,0.9)' },
+  resource: { bg: 'rgba(241,196,15,0.1)', border: 'rgba(241,196,15,0.45)', text: 'rgba(241,196,15,0.95)' },
 };
 
 /** 유닛 카드의 특수기술 발동 레벨 (Lv3·Lv5) — 도트/노트 강조용 */
@@ -95,32 +97,45 @@ export function CardPickModal({
                 {card.description}
               </Text>
 
-              <View style={styles.levelDots}>
-                {Array.from({ length: CARD_MAX_LEVEL }, (_, i) => {
-                  // 유닛 카드는 Lv3/5(=index 2/4)가 특수기술 발동 레벨
-                  const isSpecialLv = card.kind === 'unit' && SPECIAL_LEVELS.has(i + 1);
-                  return (
-                    <View
-                      key={i}
-                      style={[
-                        styles.dot,
-                        isSpecialLv && styles.dotSpecial,
-                        i < curLv && (isSpecialLv ? styles.dotSpecialOwned : styles.dotOwned),
-                        i === nextLv - 1 && styles.dotNext,
-                      ]}
-                    />
-                  );
-                })}
-                <Text style={styles.levelText}>
-                  {curLv > 0 ? `Lv.${curLv} → ${nextLv}` : `Lv.${nextLv}`}
-                  {nextLv >= CARD_MAX_LEVEL ? ' MAX' : ''}
-                </Text>
-              </View>
-              {card.kind === 'unit' && card.levelNames && (
-                <Text style={[styles.unitNote, unlocksSpecial && styles.unitNoteSpecial]}>
-                  {unlocksSpecial ? '✦ ' : '▸ '}
-                  {card.levelNames[Math.min(nextLv, CARD_MAX_LEVEL) - 1]}
-                </Text>
+              {card.kind === 'resource' ? (
+                // 재화 카드: 레벨 트랙 대신 보상 칩 표시
+                <View style={styles.rewardChip}>
+                  <Text style={styles.rewardChipText}>
+                    {card.reward?.diamonds
+                      ? `💎 +${card.reward.diamonds}`
+                      : `◈ +${card.reward?.gold ?? 0}`}
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.levelDots}>
+                    {Array.from({ length: CARD_MAX_LEVEL }, (_, i) => {
+                      // 유닛 카드는 Lv3/5(=index 2/4)가 특수기술 발동 레벨
+                      const isSpecialLv = card.kind === 'unit' && SPECIAL_LEVELS.has(i + 1);
+                      return (
+                        <View
+                          key={i}
+                          style={[
+                            styles.dot,
+                            isSpecialLv && styles.dotSpecial,
+                            i < curLv && (isSpecialLv ? styles.dotSpecialOwned : styles.dotOwned),
+                            i === nextLv - 1 && styles.dotNext,
+                          ]}
+                        />
+                      );
+                    })}
+                    <Text style={styles.levelText}>
+                      {curLv > 0 ? `Lv.${curLv} → ${nextLv}` : `Lv.${nextLv}`}
+                      {nextLv >= CARD_MAX_LEVEL ? ' MAX' : ''}
+                    </Text>
+                  </View>
+                  {card.kind === 'unit' && card.levelNames && (
+                    <Text style={[styles.unitNote, unlocksSpecial && styles.unitNoteSpecial]}>
+                      {unlocksSpecial ? '✦ ' : '▸ '}
+                      {card.levelNames[Math.min(nextLv, CARD_MAX_LEVEL) - 1]}
+                    </Text>
+                  )}
+                </>
               )}
             </Pressable>
           );
@@ -214,6 +229,16 @@ const styles = StyleSheet.create({
 
   unitNote: { fontSize: 11, fontWeight: '600', color: 'rgba(230,200,90,0.9)' },
   unitNoteSpecial: { color: 'rgba(255,190,90,0.98)', fontWeight: '800' },
+  rewardChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(241,196,15,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(241,196,15,0.5)',
+  },
+  rewardChipText: { fontSize: 14, fontWeight: '800', color: 'rgba(241,196,15,0.98)' },
   levelDots: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dot: {
     width: 8,
