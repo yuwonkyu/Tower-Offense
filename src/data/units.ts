@@ -21,7 +21,7 @@ export const BASE_UNITS: UnitDef[] = [
     id: 'archer',
     name: '활병',
     concept: '원거리 딜러',
-    stats: { atk: 24, def: 5, hp: 40, moveSpeed: 5, range: 12, atkSpeed: 1.2, aoe: 1 },
+    stats: { atk: 32, def: 5, hp: 40, moveSpeed: 5, range: 12, atkSpeed: 1.2, aoe: 1 },
     priority: 'nearest',
     exp: 2,
     unlockStage: 0,

@@ -99,6 +99,16 @@ export interface CombatEntity {
   priority: TargetPriority;
   /** 회피율 0~1 (암살자 기본 0.3) */
   evade: number;
+  /** 원거리 공격 피해 감소 0~1 (방패병 0.4, 검사 0.3) */
+  rangedDmgReduction: number;
+  /** 공성(타워/구조물) 피해 배수 (마법사·암살자 감소, 기본 1.0) */
+  siegeDmgMult: number;
+  /** 유닛 대상 공격력 배수 (암살자 1.6, 마법사 1.3, 기본 1.0) */
+  vsUnitMult: number;
+  /** 원거리 유닛 대상 공격력 배수 (기마병 1.5, 기본 1.0) */
+  vsRangedUnitMult: number;
+  /** 원거리 공격에 대한 추가 회피율 (암살자 +0.3) */
+  evadeVsRanged: number;
   /** 처치 시 경험치 (적측만 의미, 배수 적용 전) */
   killExp: number;
   /** 치명타 확률 0~1 (배수 1.5배) */
@@ -212,6 +222,12 @@ function zeroProcFields() {
     bleedRate: 0,
     burnLeft: 0,
     burnRate: 0,
+    // 역할 기본값 (직업 특성 시스템 — makeUnit에서 직업별 오버라이드)
+    rangedDmgReduction: 0,
+    siegeDmgMult: 1,
+    vsUnitMult: 1,
+    vsRangedUnitMult: 1,
+    evadeVsRanged: 0,
   };
 }
 
@@ -325,6 +341,11 @@ const SEPARATION_FORCE = 0.5;
 const CATAPULT_WIND_UP = 3.0;
 /** 이 시간(초) 경과 후 경험치 2배 (피드백 6: 장기전 보상) */
 const LATE_GAME_EXP_TIME = 300;
+/** 원거리 공격자 판정 기준 (피해 반감·회피 적용) — 타깃 우선순위 RANGED_THRESHOLD와 별개 */
+const RANGED_ATK_RANGE = 5;
+/** 생존 적 이 수 이하일 때 공성(타워) 피해 배수 (섬멸 마무리 보상) */
+const SIEGE_CLEANUP_THRESHOLD = 20;
+const SIEGE_CLEANUP_MULT = 1.5;
 /** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 7) */
 const VALOR_RADIUS = 34;
 /** 수호 오라(방패병 Lv5): 이 반경 내 아군 피해감소 (카드 개편) */
@@ -764,6 +785,18 @@ export class BattleEngine {
       healBonus: (m?.healBonusPct ?? 0) / 100,
       executeChance: (m?.executeChance ?? 0) / 100,
       noHeal: !!def.mechanical,
+      // 직업 역할 특성 오버라이드 (zeroProcFields 기본값 1/0 위에 덮어씀)
+      rangedDmgReduction:
+        unitId === 'shield' ? 0.4 :
+        unitId === 'swordsman' ? 0.3 : 0,
+      siegeDmgMult:
+        unitId === 'mageLow' || unitId === 'mageMid' || unitId === 'mageHigh' ? 0.4 :
+        unitId === 'assassin' ? 0.3 : 1,
+      vsUnitMult:
+        unitId === 'assassin' ? 1.6 :
+        unitId === 'mageLow' || unitId === 'mageMid' || unitId === 'mageHigh' ? 1.3 : 1,
+      vsRangedUnitMult: unitId === 'cavalry' ? 1.5 : 1,
+      evadeVsRanged: unitId === 'assassin' ? 0.3 : 0,
     };
   }
 
@@ -1279,14 +1312,17 @@ export class BattleEngine {
     e.state = inRange ? 'attacking' : 'moving';
     if (inRange && e.attackCd <= 0 && e.atkSpeed > 0) {
       e.attackCd = 1 / e.atkSpeed;
+      // 역할 배수 + 적 20명 이하 공성 보너스
+      const siegeAtk =
+        e.atk * e.siegeDmgMult * (this.enemyAlive <= SIEGE_CLEANUP_THRESHOLD ? SIEGE_CLEANUP_MULT : 1);
       if (e.projectileSpeed > 0) {
         // 타워 가장자리 조준 — 정지 목표라 항상 명중
         const dx = e.x - towerX;
         const dy = e.y - towerY;
         const d = Math.hypot(dx, dy) || 1;
-        this.launchProjectile(e, towerX + (dx / d) * towerRadius * 0.7, towerY + (dy / d) * towerRadius * 0.7, true);
+        this.launchProjectile(e, towerX + (dx / d) * towerRadius * 0.7, towerY + (dy / d) * towerRadius * 0.7, true, siegeAtk);
       } else {
-        this.damageTower(e.atk);
+        this.damageTower(siegeAtk);
       }
     }
   }
@@ -1416,8 +1452,8 @@ export class BattleEngine {
 
   // ── 투사체 ────────────────────────────────────────────
 
-  private launchProjectile(attacker: CombatEntity, tx: number, ty: number, targetTower: boolean) {
-    let atk = attacker.atk;
+  private launchProjectile(attacker: CombatEntity, tx: number, ty: number, targetTower: boolean, atkOverride?: number) {
+    let atk = atkOverride ?? attacker.atk;
     if (attacker.frenzyAtkPct > 0 && attacker.hp <= attacker.maxHp * 0.5) {
       atk *= 1 + attacker.frenzyAtkPct / 100;
     }
@@ -1614,7 +1650,10 @@ export class BattleEngine {
   }
 
   private applyDamage(attacker: CombatEntity, target: CombatEntity) {
-    if (target.evade > 0 && Math.random() < target.evade) return;
+    const rangedAtk = attacker.range >= RANGED_ATK_RANGE;
+    // 회피: 기본 + 원거리 공격에 추가 회피 (암살자)
+    const totalEvade = target.evade + (rangedAtk ? target.evadeVsRanged : 0);
+    if (totalEvade > 0 && Math.random() < totalEvade) return;
     // 일격(암살자 Lv5): 확률 발동 — 일반 즉사 / 보스는 면역 대신 큰 피해(공격력×배수, 방어 무시)
     if (
       attacker.executeChance > 0 &&
@@ -1634,7 +1673,16 @@ export class BattleEngine {
     if (attacker.frenzyAtkPct > 0 && attacker.hp <= attacker.maxHp * 0.5) {
       atk *= 1 + attacker.frenzyAtkPct / 100;
     }
+    // 역할 배수: 구조물 대상 vs 유닛 대상
+    if (isStructure(target.kind)) {
+      atk *= attacker.siegeDmgMult;
+    } else {
+      atk *= attacker.vsUnitMult;
+      if (target.range >= RANGED_ATK_RANGE) atk *= attacker.vsRangedUnitMult;
+    }
     let dmg = damage(atk, target.def);
+    // 원거리 공격 피해 반감 (방패병 40%, 검사 30%)
+    if (rangedAtk && target.rangedDmgReduction > 0) dmg *= 1 - target.rangedDmgReduction;
     if (attacker.critChance > 0 && Math.random() < attacker.critChance) dmg *= 1.5;
     // 추가타/불화살: 공격력 % 고정 추가피해 (방어 미적용)
     if (attacker.bonusChance > 0 && Math.random() < attacker.bonusChance) {
