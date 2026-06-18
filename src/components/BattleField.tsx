@@ -1,3 +1,10 @@
+/*
+ * 게임 루프 아키텍처: BattleEngine은 순수 TS 클래스로 ref(engineRef)에 보관하고,
+ * 매 틱 setFrame으로 강제 리렌더하면서 렌더 중 엔진 상태(수백 엔티티)를 읽어 Skia로 그린다.
+ * 이를 React state로 스냅샷하면 60fps×수백 객체 할당이라 모바일 성능이 무너진다.
+ * 따라서 의도적으로 렌더 중 ref를 읽으므로 react-hooks/refs 룰을 이 파일에서 비활성화한다.
+ */
+/* eslint-disable react-hooks/refs */
 import { Canvas, Circle, Group } from '@shopify/react-native-skia';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';

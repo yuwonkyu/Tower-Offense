@@ -9,7 +9,6 @@ import { HEROES } from '@/data/heroes';
 import {
   bulkGachaCost,
   GACHA_TIERS,
-  heroMetaExpToNext,
   heroMetaLevelFromExp,
   unitUpgradeCardCost,
   unitUpgradeGoldCost,

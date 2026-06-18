@@ -7,27 +7,26 @@ import { useMonetizationStore } from '@/store/monetizationStore';
 const AD_STUB_SECONDS = 3;
 
 interface Props {
-  visible: boolean;
   /** 광고 종료 + 보상 지급 시점 */
   onReward: () => void;
   /** 중도 닫기 (보상 없음) */
   onClose: () => void;
 }
 
-export function AdStubModal({ visible, onReward, onClose }: Props) {
+/**
+ * 부모가 조건부 마운트(`{adKind && <AdStubModal/>}`)하므로 열릴 때마다 새로 마운트된다.
+ * → useState 초기값이 카운트다운을 자동 리셋(effect 내 setState 불필요).
+ */
+export function AdStubModal({ onReward, onClose }: Props) {
   const consumeAd = useMonetizationStore((s) => s.consumeAd);
   const [secondsLeft, setSecondsLeft] = useState(AD_STUB_SECONDS);
 
   useEffect(() => {
-    if (!visible) return;
-    setSecondsLeft(AD_STUB_SECONDS);
     const timer = setInterval(() => {
       setSecondsLeft((s) => Math.max(0, s - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [visible]);
-
-  if (!visible) return null;
+  }, []);
 
   const done = secondsLeft <= 0;
 

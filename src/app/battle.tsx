@@ -78,18 +78,19 @@ export default function BattleScreen() {
   /** 일시정지 메뉴 (설정 버튼 — 피드백 10) */
   const [menuOpen, setMenuOpen] = useState(false);
 
-  /** 전투 시작 시점의 해금 목록 스냅샷 — 정산에서 "이번 클리어로 신규 해금" 판별용 */
-  const unlockedAtStart = useRef<UnitId[] | null>(null);
-  if (unlockedAtStart.current === null) {
-    unlockedAtStart.current = useProgressStore.getState().unlockedUnits;
-  }
+  /** 전투 시작 시점의 해금 목록 스냅샷 — 정산에서 "이번 클리어로 신규 해금" 판별용 (1회 캡처) */
+  const [unlockedAtStart] = useState<UnitId[]>(
+    () => useProgressStore.getState().unlockedUnits,
+  );
 
   /**
    * 일시정지 게이트: 광고/메뉴 중에는 게임 루프(틱·카드 선택 타이머)를 멈춤.
    * handleFrame이 useCallback([])이라 최신 값을 ref로 읽음 (피드백 8·9).
    */
   const pausedRef = useRef(false);
-  pausedRef.current = adKind !== null || menuOpen;
+  useEffect(() => {
+    pausedRef.current = adKind !== null || menuOpen;
+  }, [adKind, menuOpen]);
 
   const retryStage = () => {
     router.replace({ pathname: '/battle', params: { stage: stageNum, difficulty: diff } });
@@ -173,7 +174,7 @@ export default function BattleScreen() {
               (u): u is UnitId =>
                 !!u &&
                 !META_HIDDEN_UNITS.has(u) &&
-                !(unlockedAtStart.current ?? []).includes(u),
+                !unlockedAtStart.includes(u),
             ),
           ),
         ).map((u) => unitCardByUnit(u)?.name ?? u)
@@ -403,11 +404,9 @@ export default function BattleScreen() {
       )}
 
       {/* ── 광고 스텁 (설계 06 IAA — x4 / 카드 재선택 / 보상 2배) ── */}
-      <AdStubModal
-        visible={adKind !== null}
-        onReward={handleAdReward}
-        onClose={() => setAdKind(null)}
-      />
+      {adKind !== null && (
+        <AdStubModal onReward={handleAdReward} onClose={() => setAdKind(null)} />
+      )}
     </SafeAreaView>
   );
 }

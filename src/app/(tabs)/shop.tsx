@@ -253,14 +253,15 @@ export default function ShopScreen() {
       </ScrollView>
 
       {/* 무료 다이아 광고 */}
-      <AdStubModal
-        visible={adVisible}
-        onReward={() => {
-          addDiamonds(AD_FREE_DIAMONDS);
-          setAdVisible(false);
-        }}
-        onClose={() => setAdVisible(false)}
-      />
+      {adVisible && (
+        <AdStubModal
+          onReward={() => {
+            addDiamonds(AD_FREE_DIAMONDS);
+            setAdVisible(false);
+          }}
+          onClose={() => setAdVisible(false)}
+        />
+      )}
 
       {/* 간단 확인 토스트 (골드 구매 / IAP) */}
       {toast && (
