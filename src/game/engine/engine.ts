@@ -249,6 +249,18 @@ export interface VisualEffect {
   warning?: boolean;
 }
 
+/** 원거리 즉시타격 시각 트레이서 (활/마법 — 피해는 이미 즉시 적용, 시각만). 시뮬은 무시 */
+export interface Tracer {
+  id: number;
+  fromX: number;
+  fromY: number;
+  tx: number;
+  ty: number;
+  life: number;
+  maxLife: number;
+  color: string;
+}
+
 /** 적 영웅 스킬 예약 타격 — 텔레그래프(경고) 후 delay 경과 시 광역 피해 발동 */
 interface PendingStrike {
   delay: number;
@@ -259,11 +271,9 @@ interface PendingStrike {
   color: string;
 }
 
-/** 적 동시 생존 캡 — 붕괴 구간 동안 무한 적립된 주둔군이 공략 불가가 되는 것 방지 (+모바일 성능) */
-// 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화, 피드백). 폰 성능 끊기면 200으로 하향
-// 250으로 상향 (피드백 7: 유닛이 끊기지 않고 계속 나오게)
-const ENEMY_MAX_ALIVE = 250;
-const ALLY_MAX_ALIVE = 250;
+/** 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화). 폰 성능 균형점 200 (피드백) */
+const ENEMY_MAX_ALIVE = 200;
+const ALLY_MAX_ALIVE = 200;
 /** 유닛 카드 보유 시 기본 초당 생성률 — 물량 스트림으로 전선 상시 유지 (모여서 출발 대신 연속 젠) */
 const ALLY_SPAWN_BASE = 2.0;
 /** 유닛 카드 1장당 추가 생성률 (설계 07: 카드마다 독립 생성) */
@@ -332,6 +342,7 @@ export class BattleEngine {
   projectiles: Projectile[] = [];
   /** 시각 이펙트 (스킬 발동 링) — BattleField가 렌더 */
   effects: VisualEffect[] = [];
+  tracers: Tracer[] = [];
   /** 적 영웅 스킬 예약 타격 (텔레그래프 후 발동) */
   private pendingStrikes: PendingStrike[] = [];
   hero: CombatEntity;
@@ -581,6 +592,7 @@ export class BattleEngine {
     this.updateTraps();
     this.removeDead();
     this.updateEffects(dt);
+    this.updateTracers(dt);
   }
 
   /** 시각 이펙트 수명 갱신 (렌더 전용) */
@@ -589,6 +601,28 @@ export class BattleEngine {
     if (this.effects.length === 0) return;
     for (const e of this.effects) e.life -= dt;
     this.effects = this.effects.filter((e) => e.life > 0);
+  }
+
+  /** 원거리 즉시타격 트레이서 수명 갱신 (렌더 전용) */
+  private updateTracers(dt: number) {
+    if (this.tracers.length === 0) return;
+    for (const t of this.tracers) t.life -= dt;
+    this.tracers = this.tracers.filter((t) => t.life > 0);
+  }
+
+  /** 활/마법 즉시타격 시 발사 위치→타깃으로 짧은 시각 트레이서 (피드백 3) */
+  private spawnTracer(attacker: CombatEntity, tx: number, ty: number) {
+    const color = attacker.kind === 'archer' ? 'rgba(225,235,255,0.95)' : 'rgba(190,130,245,0.95)';
+    this.tracers.push({
+      id: this.nextId++,
+      fromX: attacker.x,
+      fromY: attacker.y,
+      tx,
+      ty,
+      life: 0.13,
+      maxLife: 0.13,
+      color,
+    });
   }
 
   /** 스킬/광역 발동 위치에 퍼지는 링 이펙트 추가 */
@@ -1279,6 +1313,11 @@ export class BattleEngine {
       this.launchProjectile(attacker, target.x, target.y, false);
       return;
     }
+    // 활/마법은 즉시타격이지만 발사 시각 트레이서를 남긴다 (피드백 3)
+    const k = attacker.kind;
+    if (k === 'archer' || k === 'mageLow' || k === 'mageMid' || k === 'mageHigh') {
+      this.spawnTracer(attacker, target.x, target.y);
+    }
     if (attacker.aoe > 1.5) {
       for (const c of this.entities) {
         if (c.side === attacker.side || c.state === 'dead') continue;
@@ -1745,6 +1784,8 @@ export class BattleEngine {
         this.applyDamage(e, c);
       }
     }
+    // 자폭 폭발 이펙트 — 일반 사망(요격됨)과 시각적으로 구분 (피드백 4)
+    this.spawnEffect(e.x, e.y, e.aoe, 'rgba(255,140,40,0.95)', 0.4);
     e.state = 'dead';
     e.hp = 0;
     if (e.side === 'enemy') {

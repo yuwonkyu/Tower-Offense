@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { HEROES } from '@/data/heroes';
 import { HERO_RESET_DIAMONDS } from '@/game/formulas';
-import { useProgressStore, type HeroStatAlloc } from '@/store/progressStore';
+import { computeHeroMeta, useProgressStore, type HeroStatAlloc } from '@/store/progressStore';
 
 const STAT_LABELS: { key: keyof HeroStatAlloc; label: string; unit: string }[] = [
   { key: 'atk', label: '공격력', unit: 'ATK' },
@@ -12,23 +12,24 @@ const STAT_LABELS: { key: keyof HeroStatAlloc; label: string; unit: string }[] =
   { key: 'atkSpeed', label: '공격속도', unit: 'ASPD' },
 ];
 
+const EMPTY_ALLOC: HeroStatAlloc = { atk: 0, def: 0, hp: 0, atkSpeed: 0 };
+
 export default function HeroesScreen() {
-  const getHeroMeta = useProgressStore((s) => s.getHeroMeta);
   const investHeroStat = useProgressStore((s) => s.investHeroStat);
   const resetHeroStats = useProgressStore((s) => s.resetHeroStats);
   const diamonds = useProgressStore((s) => s.diamonds);
   const selectedHeroId = useProgressStore((s) => s.selectedHeroId);
   const selectHero = useProgressStore((s) => s.selectHero);
-  // 스탯/EXP 변경 시 화면 즉시 갱신 (getHeroMeta는 함수 참조라 그 자체로는 리렌더를 트리거하지 않음 — 피드백 5)
-  useProgressStore((s) => s.heroExp);
-  useProgressStore((s) => s.heroInvestedStats);
+  // 스탯/EXP 데이터를 직접 구독 → computeHeroMeta에 넘겨 변경 즉시 재계산·리렌더 (피드백 5/3)
+  const heroExp = useProgressStore((s) => s.heroExp);
+  const heroInvestedStats = useProgressStore((s) => s.heroInvestedStats);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.title}>영웅</Text>
       <ScrollView contentContainerStyle={styles.list}>
         {HEROES.map((hero) => {
-          const meta = getHeroMeta(hero.id);
+          const meta = computeHeroMeta(heroExp[hero.id] ?? 0, heroInvestedStats[hero.id] ?? EMPTY_ALLOC);
           const expPct = meta.expToNext > 0 ? meta.expInLevel / meta.expToNext : 0;
           const isSelected = hero.id === selectedHeroId;
 

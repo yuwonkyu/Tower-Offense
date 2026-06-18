@@ -216,6 +216,14 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       canvas.drawCircle(p.x * scale, p.y * scale, 1.1 * scale, fill(PROJECTILE_COLOR));
     }
 
+    // 트레이서 (활/마법 즉시타격 시각 — 발사점→타깃 보간 이동)
+    for (const t of engine.tracers) {
+      const tp = 1 - t.life / t.maxLife;
+      const tx = t.fromX + (t.tx - t.fromX) * tp;
+      const ty = t.fromY + (t.ty - t.fromY) * tp;
+      canvas.drawCircle(tx * scale, ty * scale, 1.0 * scale, fill(t.color));
+    }
+
     // 스킬/광역 연출 — 경고(텔레그래프)는 고정 반경 위험존, 타격은 퍼지는 링
     // (효과는 소수라 프레임당 일시 Paint 생성 허용 — 동적 알파 때문)
     for (const fx of engine.effects) {

@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { cardById } from '@/data/cards';
 import type { HeroDef } from '@/game/types';
@@ -42,7 +42,7 @@ export const HeroPanel = memo(function HeroPanel({ hero, onUseSkill }: Props) {
   const skillReady = skillCooldown <= 0;
   const cardIds = Object.keys(pickedCards);
 
-  // 영웅 프로필 길게 누르면 현재 스탯 스냅샷 표시 (피드백 8)
+  // 영웅 프로필을 누르고 있는 동안만 현재 스탯 표시 (피드백 8 → 결정 2)
   const [stats, setStats] = useState<HeroStatsSnap | null>(null);
   const openStats = () => {
     const h = useBattleStore.getState().engine?.hero;
@@ -75,7 +75,11 @@ export const HeroPanel = memo(function HeroPanel({ hero, onUseSkill }: Props) {
   return (
     <View style={styles.bottomPanel}>
       <View style={styles.bottomRow}>
-        <Pressable style={styles.heroIcon} onLongPress={openStats} delayLongPress={250}>
+        <Pressable
+          style={styles.heroIcon}
+          onPressIn={openStats}
+          onPressOut={() => setStats(null)}
+        >
           <Text style={styles.heroIconText}>{hero.name[0]}</Text>
           {reviveLeft > 0 && (
             <View style={styles.reviveOverlay}>
@@ -133,23 +137,20 @@ export const HeroPanel = memo(function HeroPanel({ hero, onUseSkill }: Props) {
         EXP {exp.toLocaleString()} / {expToNext.toLocaleString()}
       </Text>
 
-      {/* 영웅 스탯 스냅샷 (길게 누르기) */}
-      <Modal visible={stats !== null} transparent animationType="fade" onRequestClose={() => setStats(null)}>
-        <Pressable style={styles.statBackdrop} onPress={() => setStats(null)}>
-          <View style={styles.statCard}>
-            <Text style={styles.statTitle}>{hero.name} · 현재 스탯</Text>
-            <View style={styles.statGrid}>
-              {statRows.map(([k, v]) => (
-                <View key={k} style={styles.statItem}>
-                  <Text style={styles.statKey}>{k}</Text>
-                  <Text style={styles.statVal}>{v}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.statHint}>아무 곳이나 탭하여 닫기</Text>
+      {/* 영웅 스탯 — 프로필 위에 떠서 표시 (누르는 동안만, 전투 화면은 그대로 보임) */}
+      {stats && (
+        <View style={styles.statPopup} pointerEvents="none">
+          <Text style={styles.statTitle}>{hero.name} · 현재 스탯</Text>
+          <View style={styles.statGrid}>
+            {statRows.map(([k, v]) => (
+              <View key={k} style={styles.statItem}>
+                <Text style={styles.statKey}>{k}</Text>
+                <Text style={styles.statVal}>{v}</Text>
+              </View>
+            ))}
           </View>
-        </Pressable>
-      </Modal>
+        </View>
+      )}
     </View>
   );
 });
@@ -250,23 +251,22 @@ const styles = StyleSheet.create({
     color: '#5a8fc0',
     paddingVertical: 4,
   },
-  statBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statCard: {
-    width: '78%',
-    backgroundColor: Colors.panel,
-    borderRadius: 14,
+  statPopup: {
+    position: 'absolute',
+    left: 8,
+    bottom: 72,
+    width: 220,
+    backgroundColor: 'rgba(16,20,30,0.96)',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(120,200,255,0.4)',
-    padding: 16,
-    gap: 10,
+    borderColor: 'rgba(120,200,255,0.55)',
+    padding: 12,
+    gap: 8,
+    zIndex: 20,
+    elevation: 20,
   },
   statTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: 'rgba(160,220,255,0.95)',
     textAlign: 'center',
@@ -276,11 +276,10 @@ const styles = StyleSheet.create({
     width: '50%',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 5,
+    paddingVertical: 4,
     paddingHorizontal: 4,
   },
   statKey: { fontSize: 12, color: Colors.textSub },
   statVal: { fontSize: 12, fontWeight: '700', color: Colors.textMain },
-  statHint: { fontSize: 10, color: Colors.textDim, textAlign: 'center', marginTop: 2 },
 });
 

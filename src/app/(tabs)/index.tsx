@@ -60,7 +60,10 @@ export default function HomeScreen() {
         numColumns={5}
         contentContainerStyle={styles.grid}
         renderItem={({ item: stage }) => {
-          const locked = hard ? stage > hardUnlocked : stage > clearedStage + 1;
+          // 하드도 일반처럼 순차 해금: 직전 하드 클리어해야 다음 개방 + 일반 진행도가 연 티어 내 (피드백)
+          const locked = hard
+            ? stage > Math.min(hardCleared + 1, hardUnlocked)
+            : stage > clearedStage + 1;
           const cleared = hard ? stage <= hardCleared : stage <= clearedStage;
           const hero = enemyHeroForStage(stage);
           const visual = ENEMY_HERO_VISUAL[hero.id];

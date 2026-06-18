@@ -43,6 +43,20 @@ export interface HeroMetaInfo {
   skillLevel: number;
 }
 
+/**
+ * 영웅 메타 계산 — 순수 함수. (getState를 읽는 메서드로 두면 React Compiler가
+ * 입력 불변으로 보고 결과를 캐싱해 화면이 즉시 갱신되지 않음 — 피드백 5/3 재발 방지.)
+ * UI는 구독한 totalExp/invested를 직접 넘겨 호출 → 변경 시 재계산 보장.
+ */
+export function computeHeroMeta(totalExp: number, invested: HeroStatAlloc): HeroMetaInfo {
+  const { level, expInLevel, expToNext } = heroMetaLevelFromExp(totalExp);
+  const usedStatPts = invested.atk + invested.def + invested.hp + invested.atkSpeed;
+  const statPtsAvailable = level - 1 - usedStatPts;
+  // 스킬은 자동 레벨업 — 5레벨마다 +1 (스킬이 1개뿐이라 수동 분배 불필요, 피드백 6)
+  const skillLevel = 1 + Math.floor((level - 1) / 5);
+  return { level, expInLevel, expToNext, statPtsAvailable, skillPtsAvailable: 0, invested, skillLevel };
+}
+
 // ── 가챠 풀 ───────────────────────────────────────────────────────────
 
 // 가챠 풀: 마법사 진화 중급/상급은 제외 (mageLow = "마법사" 대표 1종으로 통합)
@@ -204,18 +218,7 @@ export const useProgressStore = create<ProgressState>()(
 
       getHeroMeta: (heroId) => {
         const s = get();
-        const totalExp = s.heroExp[heroId] ?? 0;
-        const { level, expInLevel, expToNext } = heroMetaLevelFromExp(totalExp);
-
-        const invested = s.heroInvestedStats[heroId] ?? EMPTY_ALLOC;
-        const usedStatPts = invested.atk + invested.def + invested.hp + invested.atkSpeed;
-        const statPtsEarned = level - 1;
-        const statPtsAvailable = statPtsEarned - usedStatPts;
-
-        // 스킬은 자동 레벨업 — 5레벨마다 +1 (스킬이 1개뿐이라 수동 분배 불필요, 피드백 6)
-        const skillLevel = 1 + Math.floor((level - 1) / 5);
-
-        return { level, expInLevel, expToNext, statPtsAvailable, skillPtsAvailable: 0, invested, skillLevel };
+        return computeHeroMeta(s.heroExp[heroId] ?? 0, s.heroInvestedStats[heroId] ?? EMPTY_ALLOC);
       },
 
       investHeroStat: (heroId, stat) => {
