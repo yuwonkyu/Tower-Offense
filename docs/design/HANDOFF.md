@@ -83,6 +83,15 @@
   - 데스크탑은 기존 빌드 환경 그대로 사용
 - 헤드리스 밸런스 시뮬: `npx tsx scripts/simBattle.ts [스테이지]`
 
+### ⚙️ 빌드 트러블슈팅 — foojay / IBM_SEMERU (2026-06-18 해결)
+- 증상: `npx expo run:android` 시 `JvmVendorSpec does not have member field 'IBM_SEMERU'`로 Gradle 빌드 실패
+- 원인: `@react-native/gradle-plugin@0.85.3`이 foojay-resolver-convention **0.5.0**을 하드코딩 → Gradle 9에서 제거된 `IBM_SEMERU` 참조 (RN 알려진 이슈 facebook/react-native#55781)
+- 해결: **patch-package**로 foojay `0.5.0→1.0.0` 고정
+  - `patches/@react-native+gradle-plugin+0.85.3.patch` 커밋됨
+  - `package.json`에 `postinstall: patch-package` 추가 → `npm install` 때 자동 재적용
+  - **데스크탑은 `git pull` 후 `npm install` 한 번** 하면 패치 적용됨 (이후 `npx expo run:android` 정상)
+- 검증: `gradlew help` BUILD SUCCESSFUL (설정 단계 통과 확인)
+
 ---
 
 ## 6. 참고
