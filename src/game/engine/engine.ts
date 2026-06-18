@@ -163,6 +163,8 @@ export interface CombatEntity {
   executeChance: number;
   /** 피격 플래시 남은 시간 (초) — 타격감 연출, 렌더 전용 */
   hitFlash: number;
+  /** 폭탄병 폭발 1회 처리 플래그 (자폭/요격사망 중복 폭발 방지) */
+  exploded?: boolean;
   /** 기계 유닛 — 회복 불가 (치유/재생/흡혈 대상 제외) */
   noHeal: boolean;
   // 상태이상 런타임 (피격측)
@@ -1318,6 +1320,11 @@ export class BattleEngine {
     if (k === 'archer' || k === 'mageLow' || k === 'mageMid' || k === 'mageHigh') {
       this.spawnTracer(attacker, target.x, target.y);
     }
+    // 마법사 고급 = 체인 라이트닝 (본 타깃 + 인접 2회 튕김 + 점멸 이펙트, 피드백)
+    if (k === 'mageHigh') {
+      this.chainLightning(attacker, target);
+      return;
+    }
     if (attacker.aoe > 1.5) {
       for (const c of this.entities) {
         if (c.side === attacker.side || c.state === 'dead') continue;
@@ -1355,6 +1362,33 @@ export class BattleEngine {
           c.targetId = attacker.id;
         }
       }
+    }
+  }
+
+  /** 체인 라이트닝(마법사 고급): 본 타깃 → 인접 적으로 최대 2회 튕기며 타격 + 점멸 이펙트 */
+  private chainLightning(attacker: CombatEntity, target: CombatEntity) {
+    const CHAIN_RADIUS = 8;
+    const hits: CombatEntity[] = [target];
+    let from = target;
+    for (let b = 0; b < 2; b++) {
+      let best: CombatEntity | null = null;
+      let bestD = Infinity;
+      for (const c of this.entities) {
+        if (c.side === attacker.side || c.state === 'dead' || isStructure(c.kind)) continue;
+        if (hits.includes(c)) continue;
+        const d = Math.hypot(c.x - from.x, c.y - from.y);
+        if (d <= CHAIN_RADIUS && d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      if (!best) break;
+      hits.push(best);
+      from = best;
+    }
+    for (const h of hits) {
+      this.applyDamage(attacker, h);
+      this.spawnEffect(h.x, h.y, 2.2, 'rgba(150,210,255,0.95)', 0.22); // 라이트닝 점멸
     }
   }
 
@@ -1748,6 +1782,19 @@ export class BattleEngine {
     }
   }
 
+  /** 폭탄병 폭발: 반경 내 상대 전체 피해 + 폭발 이펙트. 자폭/요격사망 공통, 1회만 (피드백) */
+  private explodeBomber(e: CombatEntity) {
+    if (e.exploded) return;
+    e.exploded = true;
+    for (const c of this.entities) {
+      if (c.side === e.side || c.state === 'dead') continue;
+      if (Math.hypot(c.x - e.x, c.y - e.y) <= e.aoe) {
+        this.applyDamage(e, c);
+      }
+    }
+    this.spawnEffect(e.x, e.y, e.aoe, 'rgba(255,140,40,0.95)', 0.4);
+  }
+
   /** 폭탄병: 가장 가까운 상대에게 접근 후 자폭 (자폭 시 EXP 50%) */
   private actBomber(e: CombatEntity, dt: number) {
     const { towerX, towerY, towerRadius } = this.field;
@@ -1777,15 +1824,7 @@ export class BattleEngine {
       e.state = 'moving';
       return;
     }
-    // 자폭: 반경 내 상대 전체 피해
-    for (const c of this.entities) {
-      if (c.side === e.side || c.state === 'dead') continue;
-      if (Math.hypot(c.x - e.x, c.y - e.y) <= e.aoe) {
-        this.applyDamage(e, c);
-      }
-    }
-    // 자폭 폭발 이펙트 — 일반 사망(요격됨)과 시각적으로 구분 (피드백 4)
-    this.spawnEffect(e.x, e.y, e.aoe, 'rgba(255,140,40,0.95)', 0.4);
+    this.explodeBomber(e);
     e.state = 'dead';
     e.hp = 0;
     if (e.side === 'enemy') {
@@ -1830,6 +1869,8 @@ export class BattleEngine {
     let needsClean = false;
     for (const e of this.entities) {
       if (e.state === 'dead' && e.kind !== 'hero') {
+        // 폭탄병은 요격당해 죽어도 터진다 (자폭 못 하고 뭉쳐 죽는 문제 해결, 피드백)
+        if (e.kind === 'bomber' && !e.exploded) this.explodeBomber(e);
         this.byId.delete(e.id);
         needsClean = true;
       }

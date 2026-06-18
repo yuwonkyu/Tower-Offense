@@ -56,7 +56,7 @@ export const NEW_ENEMY_UNITS: UnitDef[] = [
     id: 'bomber',
     name: '폭탄병',
     concept: '자폭 광역',
-    stats: { atk: 80, def: 5, hp: 50, moveSpeed: 4, range: 0, atkSpeed: 0, aoe: 4 },
+    stats: { atk: 80, def: 5, hp: 50, moveSpeed: 4, range: 0, atkSpeed: 0, aoe: 5 },
     priority: 'cluster',
     exp: 10,
     unlockStage: 18,
