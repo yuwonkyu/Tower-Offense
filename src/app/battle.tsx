@@ -1,9 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AdStubModal } from '@/components/AdStubModal';
 import { BattleField } from '@/components/BattleField';
+import { EnemyTowerBar } from '@/components/battle/EnemyTowerBar';
+import { ExpBar } from '@/components/battle/ExpBar';
+import { FieldHud } from '@/components/battle/FieldHud';
+import { HeroPanel } from '@/components/battle/HeroPanel';
 import { CardPickModal } from '@/components/CardPickModal';
 import { PauseMenuModal } from '@/components/PauseMenuModal';
 import { ResourceNoticeModal } from '@/components/ResourceNoticeModal';
@@ -20,50 +24,29 @@ import { useProgressStore } from '@/store/progressStore';
 import { useMonetizationStore } from '@/store/monetizationStore';
 import { EXTRA_UNLOCKS, TOTAL_STAGES } from '@/data/stages';
 
-const CARD_SLOTS = 8;
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
 export default function BattleScreen() {
   const { stage, difficulty } = useLocalSearchParams<{ stage: string; difficulty?: string }>();
   const stageNum = Number(stage) || 1;
   const diff: 'normal' | 'hard' = difficulty === 'hard' ? 'hard' : 'normal';
 
+  // ── 부모는 저빈도/이벤트성 상태만 구독한다 (고빈도 HUD 값은 각 HUD 컴포넌트가 직접 구독) ──
   const config = useBattleStore((s) => s.config);
   const hero = useBattleStore((s) => s.hero);
   const phase = useBattleStore((s) => s.phase);
-  const timeLeft = useBattleStore((s) => s.timeLeft);
   const speed = useBattleStore((s) => s.speed);
-  const towerHp = useBattleStore((s) => s.towerHp);
-  const heroHp = useBattleStore((s) => s.heroHp);
-  const heroMaxHp = useBattleStore((s) => s.heroMaxHp);
-  const heroLevel = useBattleStore((s) => s.heroLevel);
-  const exp = useBattleStore((s) => s.exp);
-  const expToNext = useBattleStore((s) => s.expToNext);
-  const skillCooldown = useBattleStore((s) => s.skillCooldown);
-  const kills = useBattleStore((s) => s.kills);
-  const enemyCount = useBattleStore((s) => s.enemyCount);
-  const allyCount = useBattleStore((s) => s.allyCount);
-  const deaths = useBattleStore((s) => s.deaths);
-  const clearTime = useBattleStore((s) => s.clearTime);
-  const goldEarned = useBattleStore((s) => s.goldEarned);
-  const reviveLeft = useBattleStore((s) => s.reviveLeft);
+  // 모달 전용 상태
   const pickedCards = useBattleStore((s) => s.pickedCards);
   const pickChoices = useBattleStore((s) => s.pickChoices);
   const pickTimeLeft = useBattleStore((s) => s.pickTimeLeft);
   const rerollUsed = useBattleStore((s) => s.rerollUsed);
   const rewardDoubled = useBattleStore((s) => s.rewardDoubled);
   const resourceGain = useBattleStore((s) => s.resourceGain);
-  const dismissResourceNotice = useBattleStore((s) => s.dismissResourceNotice);
+  // 액션 (안정적 참조)
   const startStage = useBattleStore((s) => s.startStage);
   const pickCard = useBattleStore((s) => s.pickCard);
-  const cycleSpeed = useBattleStore((s) => s.cycleSpeed);
   const useSkill = useBattleStore((s) => s.useSkill);
   const reset = useBattleStore((s) => s.reset);
+  const dismissResourceNotice = useBattleStore((s) => s.dismissResourceNotice);
 
   const onStageClear = useProgressStore((s) => s.onStageClear);
   const onStageDefeat = useProgressStore((s) => s.onStageDefeat);
@@ -71,17 +54,15 @@ export default function BattleScreen() {
   const adFree = useMonetizationStore((s) => s.adFree);
 
   /** 진행 중인 광고 보상 종류 (null = 광고 없음) */
-  const [adKind, setAdKind] = useState<
-    'doubleReward' | 'cardReroll' | 'speedX4' | 'retry' | null
-  >(null);
+  const [adKind, setAdKind] = useState<'doubleReward' | 'cardReroll' | 'speedX4' | 'retry' | null>(
+    null,
+  );
 
   /** 일시정지 메뉴 (설정 버튼 — 피드백 10) */
   const [menuOpen, setMenuOpen] = useState(false);
 
   /** 전투 시작 시점의 해금 목록 스냅샷 — 정산에서 "이번 클리어로 신규 해금" 판별용 (1회 캡처) */
-  const [unlockedAtStart] = useState<UnitId[]>(
-    () => useProgressStore.getState().unlockedUnits,
-  );
+  const [unlockedAtStart] = useState<UnitId[]>(() => useProgressStore.getState().unlockedUnits);
 
   /**
    * 일시정지 게이트: 광고/메뉴 중에는 게임 루프(틱·카드 선택 타이머)를 멈춤.
@@ -95,7 +76,6 @@ export default function BattleScreen() {
   /**
    * HUD 동기화 스로틀 누적기. 엔진 시뮬/캔버스는 BattleField가 매 프레임(60Hz) 그리지만,
    * 스토어(→HUD 리렌더)는 ~10Hz로만 갱신해 전체 화면 리렌더 폭주를 막는다.
-   * (HP바/카운트/타이머는 60fps가 불필요 — 이게 폰 프레임 붕괴의 주원인이었음)
    */
   const syncAccumRef = useRef(0);
 
@@ -120,26 +100,29 @@ export default function BattleScreen() {
     setAdKind(null);
   };
 
-  const handleSpeedPress = () => {
-    if (cycleSpeed() === 'needsX4Ad') setAdKind('speedX4');
-  };
+  const handleSpeedPress = useCallback(() => {
+    if (useBattleStore.getState().cycleSpeed() === 'needsX4Ad') setAdKind('speedX4');
+  }, []);
 
-  // 결과 확정 시 진행도 저장 (1회만)
-  const engine = useBattleStore((s) => s.engine);
+  const handleOpenMenu = useCallback(() => setMenuOpen(true), []);
+
+  // 결과 확정 시 진행도 저장 (1회만) — 최종 수치는 getState()로 비반응 읽기
   useEffect(() => {
-    const heroId = hero.id; // 선택 영웅
+    if (phase !== 'victory' && phase !== 'defeat') return;
+    const st = useBattleStore.getState();
+    const heroId = st.hero.id;
     if (phase === 'victory') {
       onStageClear({
         stage: stageNum,
-        goldEarned,
-        unlocksUnit: config?.unlocksUnit,
+        goldEarned: st.goldEarned,
+        unlocksUnit: st.config?.unlocksUnit,
         heroId,
         heroExpGained: heroMetaExpForStage(stageNum, true),
         difficulty: diff,
       });
-    } else if (phase === 'defeat') {
+    } else {
       onStageDefeat({
-        goldEarned,
+        goldEarned: st.goldEarned,
         heroId,
         heroExpGained: heroMetaExpForStage(stageNum, false),
       });
@@ -153,11 +136,9 @@ export default function BattleScreen() {
     return () => reset();
   }, [stageNum, diff, startStage, reset]);
 
-  // 게임 루프 (BattleField rAF)에서 매 프레임 호출
+  // 게임 루프 (BattleField rAF)에서 매 프레임 호출 — HUD 동기화는 ~10Hz 스로틀
   const handleFrame = useCallback((engine: BattleEngine, dt: number) => {
-    // 광고/일시정지 메뉴 중에는 틱·카드 선택 타이머 정지 (피드백 8·9)
     if (pausedRef.current) return;
-    // HUD 동기화 ~10Hz 스로틀 — 누적 dt로 타이머 정확도 유지 (매 프레임 set→전체 리렌더 방지)
     syncAccumRef.current += dt;
     if (syncAccumRef.current < 0.1) return;
     const acc = syncAccumRef.current;
@@ -171,175 +152,50 @@ export default function BattleScreen() {
 
   const enemyHero = ENEMY_HEROES.find((h) => h.id === config.enemyHero)!;
   const heroVisual = ENEMY_HERO_VISUAL[config.enemyHero];
-  const towerPct = towerHp / config.tower.hp;
-  const heroPct = heroMaxHp > 0 ? heroHp / heroMaxHp : 0;
-  const expPct = expToNext > 0 ? exp / expToNext : 0;
-  const skillReady = skillCooldown <= 0;
-  const cardIds = Object.keys(pickedCards);
+  const isResult = phase === 'victory' || phase === 'defeat';
 
-  // 정산: 이번 클리어로 새로 해금된 유닛 이름 (메타 히든=마법사 진화형 제외)
+  // 정산 데이터: 결과 페이즈에서만 최종값을 비반응 스냅샷으로 읽음 (엔진 정지 상태라 안정)
+  const st = isResult ? useBattleStore.getState() : null;
   const newlyUnlockedNames =
     phase === 'victory'
       ? Array.from(
           new Set(
             [config.unlocksUnit, ...(EXTRA_UNLOCKS[stageNum] ?? [])].filter(
               (u): u is UnitId =>
-                !!u &&
-                !META_HIDDEN_UNITS.has(u) &&
-                !unlockedAtStart.includes(u),
+                !!u && !META_HIDDEN_UNITS.has(u) && !unlockedAtStart.includes(u),
             ),
           ),
         ).map((u) => unitCardByUnit(u)?.name ?? u)
       : [];
-
-  // 정산: 이번 전투에서 픽한 카드 (이름 + 레벨)
-  const pickedSummary = cardIds.map((id) => ({
-    name: cardById(id)?.name ?? id,
-    level: pickedCards[id],
-  }));
+  const pickedSummary = isResult
+    ? Object.keys(pickedCards).map((id) => ({ name: cardById(id)?.name ?? id, level: pickedCards[id] }))
+    : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* ── 상단 바: 적 영웅(종족 구분) / 적 HP / 설정 ── */}
-      <View style={styles.topBar}>
-        {/* 적 영웅 엠블럼 — 스테이지대별 색/아이콘 구분 (피드백 6) */}
-        <View style={[styles.enemyEmblem, { borderColor: heroVisual.color }]}>
-          <Text style={styles.enemyEmblemIcon}>{heroVisual.icon}</Text>
-        </View>
-        <View style={styles.topLeft}>
-          <View style={styles.topRow}>
-            <View style={styles.enemyNameWrap}>
-              <Text style={[styles.enemyName, { color: heroVisual.color }]}>{enemyHero.name}</Text>
-              <View style={[styles.enemyTag, { borderColor: heroVisual.color }]}>
-                <Text style={[styles.enemyTagText, { color: heroVisual.color }]}>
-                  {heroVisual.tag}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.enemyHpText}>
-              {Math.ceil(towerHp).toLocaleString()} / {config.tower.hp.toLocaleString()}
-            </Text>
-          </View>
-          <View style={styles.enemyHpBar}>
-            <View
-              style={[styles.enemyHpFill, { width: `${towerPct * 100}%`, backgroundColor: heroVisual.color }]}
-            />
-          </View>
-        </View>
-        <Pressable style={styles.settingsBtn} onPress={() => setMenuOpen(true)}>
-          <Text style={styles.settingsIcon}>⚙</Text>
-        </Pressable>
-      </View>
+      {/* ── 상단 바: 적 영웅 / 타워 HP / 설정 ── */}
+      <EnemyTowerBar
+        enemyName={enemyHero.name}
+        heroVisual={heroVisual}
+        towerMaxHp={config.tower.hp}
+        onOpenMenu={handleOpenMenu}
+      />
 
-      {/* ── 전투 필드 ── */}
+      {/* ── 전투 필드 (캔버스 + 오버레이 HUD) ── */}
       <View style={styles.field}>
-        {/* 좌상단: 생존 적 유닛 수 (피드백 11) */}
-        <View style={[styles.countChip, styles.enemyCountChip]}>
-          <Text style={[styles.countText, styles.enemyCountText]}>적 {enemyCount}</Text>
-        </View>
-
-        {/* 우상단: 시간 + 배속 */}
-        <View style={styles.fieldTopRight}>
-          <View style={styles.timerChip}>
-            <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-          </View>
-          <Pressable style={styles.speedChip} onPress={handleSpeedPress}>
-            <Text style={styles.speedText}>x{speed}</Text>
-          </Pressable>
-        </View>
-
-        {/* 전투 캔버스: 타워 / 양측 유닛 자동 전투 / 영웅 */}
         <BattleField
           config={config}
           heroDef={hero}
           speed={speed}
           running={phase === 'running' && adKind === null && !menuOpen}
-          towerPct={towerPct}
           onFrame={handleFrame}
         />
-        <Text style={styles.stageLabel}>
-          스테이지 {config.stage}{diff === 'hard' ? ' · 하드' : ''} · 처치 {kills}
-        </Text>
-
-        {/* 우하단: 생존 아군 유닛 수 (피드백 11) */}
-        <View style={[styles.countChip, styles.allyCountChip]}>
-          <Text style={[styles.countText, styles.allyCountText]}>아군 {allyCount}</Text>
-        </View>
-
-        {/* 페이즈 오버레이 — 정산 모달로 대체 */}
+        <FieldHud stage={config.stage} hard={diff === 'hard'} onSpeedPress={handleSpeedPress} />
       </View>
 
-      {/* ── 하단 패널 ── */}
-      <View style={styles.bottomPanel}>
-        <View style={styles.bottomRow}>
-          {/* 영웅 아이콘 (사망 시 부활 카운트다운 오버레이) */}
-          <View style={styles.heroIcon}>
-            <Text style={styles.heroIconText}>{hero.name[0]}</Text>
-            {reviveLeft > 0 && (
-              <View style={styles.reviveOverlay}>
-                <Text style={styles.reviveText}>{Math.ceil(reviveLeft)}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* 중앙: Lv + 닉네임 + HP + 카드 */}
-          <View style={styles.heroInfo}>
-            <View style={styles.heroInfoRow}>
-              <View style={styles.heroNameWrap}>
-                <View style={styles.lvBadge}>
-                  <Text style={styles.lvText}>Lv.{heroLevel}</Text>
-                </View>
-                <Text style={styles.nickname}>{hero.name}</Text>
-              </View>
-              <Text style={styles.heroHpText}>
-                {Math.ceil(heroHp)} / {heroMaxHp}
-              </Text>
-            </View>
-            <View style={styles.heroHpBar}>
-              <View style={[styles.heroHpFill, { width: `${heroPct * 100}%` }]} />
-            </View>
-            <View style={styles.cardRow}>
-              {Array.from({ length: CARD_SLOTS }, (_, i) => {
-                const cardId = cardIds[i];
-                const card = cardId ? cardById(cardId) : undefined;
-                const lv = cardId ? pickedCards[cardId] : 0;
-                return (
-                  <View key={i} style={[styles.cardSlot, !cardId && styles.cardSlotEmpty]}>
-                    {card ? (
-                      <>
-                        <Text style={styles.cardSlotText}>{card.name.slice(0, 2)}</Text>
-                        <Text style={styles.cardSlotLv}>{lv}</Text>
-                      </>
-                    ) : (
-                      <Text style={styles.cardSlotPlus}>+</Text>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* 스킬 버튼 */}
-          <Pressable
-            style={[styles.skillBtn, !skillReady && styles.skillBtnCooldown]}
-            onPress={useSkill}
-            disabled={!skillReady}
-          >
-            <Text style={styles.skillText}>
-              {skillReady ? hero.skill.name : Math.ceil(skillCooldown)}
-            </Text>
-          </Pressable>
-        </View>
-
-        <Text style={styles.expText}>
-          EXP {exp.toLocaleString()} / {expToNext.toLocaleString()}
-        </Text>
-      </View>
-
-      {/* ── 경험치 바 ── */}
-      <View style={styles.expBar}>
-        <View style={[styles.expFill, { width: `${expPct * 100}%` }]} />
-      </View>
+      {/* ── 하단 패널 (영웅/카드/스킬) + EXP 바 ── */}
+      <HeroPanel hero={hero} onUseSkill={useSkill} />
+      <ExpBar />
 
       {/* ── 카드 선택 (레벨업 / 전투 시작) — 전투 일시정지 ── */}
       {phase === 'cardPick' && (
@@ -348,10 +204,9 @@ export default function BattleScreen() {
           ownedLevels={pickedCards}
           timeLeft={pickTimeLeft}
           totalTime={CARD_PICK_SECONDS}
-          level={heroLevel}
+          level={useBattleStore.getState().heroLevel}
           onPick={pickCard}
           onReroll={() => {
-            // 프리미엄 = 광고 없이 무료 리롤(픽당 1회), 그 외엔 광고 시청
             if (adFree) useBattleStore.getState().rerollCards();
             else setAdKind('cardReroll');
           }}
@@ -366,17 +221,17 @@ export default function BattleScreen() {
       )}
 
       {/* ── 스테이지 정산 ── */}
-      {(phase === 'victory' || phase === 'defeat') && (
+      {isResult && st && (
         <StageResultModal
           result={{
             victory: phase === 'victory',
             stage: stageNum,
-            kills,
-            deaths,
-            totalExp: engine?.totalExp ?? 0,
-            goldEarned,
-            clearTime,
-            finalLevel: heroLevel,
+            kills: st.kills,
+            deaths: st.deaths,
+            totalExp: st.engine?.totalExp ?? 0,
+            goldEarned: st.goldEarned,
+            clearTime: st.clearTime,
+            finalLevel: st.heroLevel,
           }}
           unlockedUnits={newlyUnlockedNames}
           pickedCards={pickedSummary}
@@ -385,7 +240,6 @@ export default function BattleScreen() {
             router.replace({ pathname: '/battle', params: { stage: next, difficulty: diff } });
           }}
           onRetry={() => {
-            // 실패 재도전 = 광고 (설계 06 IAA) — 광고 제거 구매자/승리 후 재시도는 무료
             if (phase === 'defeat' && !adFree) {
               setAdKind('retry');
             } else {
@@ -416,220 +270,12 @@ export default function BattleScreen() {
       )}
 
       {/* ── 광고 스텁 (설계 06 IAA — x4 / 카드 재선택 / 보상 2배) ── */}
-      {adKind !== null && (
-        <AdStubModal onReward={handleAdReward} onClose={() => setAdKind(null)} />
-      )}
+      {adKind !== null && <AdStubModal onReward={handleAdReward} onClose={() => setAdKind(null)} />}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-
-  topBar: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.panelDark,
-    alignItems: 'stretch',
-  },
-  topLeft: { flex: 1, gap: 4 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  enemyEmblem: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  enemyEmblemIcon: { fontSize: 18 },
-  enemyNameWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  enemyName: { fontSize: 14, fontWeight: '700' },
-  enemyTag: {
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  enemyTagText: { fontSize: 9, fontWeight: '700' },
-  enemyHpText: { fontSize: 11, color: Colors.enemyHp },
-  enemyHpBar: {
-    height: 10,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 5,
-    overflow: 'hidden',
-  },
-  enemyHpFill: { height: '100%', backgroundColor: Colors.enemyHp, borderRadius: 5 },
-  settingsBtn: {
-    width: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsIcon: { fontSize: 16, color: Colors.textSub },
-
   field: { flex: 1, backgroundColor: Colors.bgField },
-  fieldTopRight: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    alignItems: 'flex-end',
-    gap: 6,
-    zIndex: 2,
-  },
-  timerChip: {
-    backgroundColor: 'rgba(255,200,0,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,200,0,0.35)',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  timerText: { fontSize: 14, fontWeight: '600', color: Colors.timer },
-  speedChip: {
-    backgroundColor: Colors.speedBg,
-    borderWidth: 1,
-    borderColor: 'rgba(100,150,255,0.45)',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  speedText: { fontSize: 13, fontWeight: '600', color: Colors.speed },
-
-  stageLabel: {
-    position: 'absolute',
-    bottom: 8,
-    left: 10,
-    fontSize: 11,
-    color: Colors.textDim,
-  },
-  countChip: {
-    position: 'absolute',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    zIndex: 2,
-  },
-  enemyCountChip: {
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(220,70,70,0.14)',
-    borderColor: 'rgba(220,70,70,0.4)',
-  },
-  allyCountChip: {
-    bottom: 8,
-    right: 10,
-    backgroundColor: 'rgba(100,180,255,0.14)',
-    borderColor: 'rgba(100,180,255,0.45)',
-  },
-  countText: { fontSize: 12, fontWeight: '700' },
-  enemyCountText: { color: 'rgba(255,120,120,0.95)' },
-  allyCountText: { color: 'rgba(140,200,255,0.95)' },
-
-  bottomPanel: {
-    backgroundColor: Colors.panel,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 2,
-  },
-  bottomRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  heroIcon: {
-    width: 52,
-    borderRadius: 8,
-    backgroundColor: Colors.hero,
-    borderWidth: 1.5,
-    borderColor: Colors.heroBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroIconText: { fontSize: 20, fontWeight: '700', color: Colors.heroText },
-  reviveOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reviveText: { fontSize: 18, fontWeight: '700', color: Colors.enemyHp },
-  heroInfo: { flex: 1, gap: 4 },
-  heroInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  heroNameWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  lvBadge: {
-    backgroundColor: 'rgba(160,100,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(160,100,255,0.4)',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  lvText: { fontSize: 10, color: 'rgba(190,150,255,0.9)' },
-  nickname: { fontSize: 13, fontWeight: '600', color: Colors.textMain },
-  heroHpText: { fontSize: 10, color: Colors.allyHp },
-  heroHpBar: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  heroHpFill: { height: '100%', backgroundColor: Colors.allyHp, borderRadius: 3 },
-  cardRow: { flexDirection: 'row', gap: 3 },
-  cardSlot: {
-    flex: 1,
-    height: 30,
-    borderRadius: 4,
-    backgroundColor: Colors.cardUnit,
-    borderWidth: 1,
-    borderColor: Colors.cardUnitBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardSlotEmpty: {
-    backgroundColor: Colors.cardEmpty,
-    borderColor: Colors.cardEmptyBorder,
-    borderStyle: 'dashed',
-  },
-  cardSlotText: { fontSize: 9, color: 'rgba(220,190,80,0.85)' },
-  cardSlotLv: {
-    position: 'absolute',
-    top: 1,
-    right: 3,
-    fontSize: 8,
-    fontWeight: '700',
-    color: 'rgba(120,200,255,0.9)',
-  },
-  cardSlotPlus: { fontSize: 12, color: 'rgba(110,110,140,0.4)' },
-
-  skillBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.skill,
-    borderWidth: 2.5,
-    borderColor: Colors.skillRing,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-  },
-  skillBtnCooldown: { opacity: 0.45, borderColor: 'rgba(255,255,255,0.2)' },
-  skillText: { fontSize: 11, fontWeight: '600', color: '#fff' },
-
-  expText: {
-    textAlign: 'right',
-    fontSize: 10,
-    color: '#5a8fc0',
-    paddingVertical: 4,
-  },
-  expBar: { height: 10, backgroundColor: 'rgba(255,255,255,0.07)' },
-  expFill: { height: '100%', backgroundColor: Colors.exp },
 });

@@ -6,9 +6,8 @@
  * React가 재조정(reconcile)해야 해서 모바일에서 프레임이 초 단위로 무너진다.
  * 따라서 모든 엔티티를 단일 <Picture>의 명령형 드로잉 루프(canvas.drawCircle)로 그린다.
  * React 트리는 <Canvas><Picture/></Canvas> 2노드뿐이라 재조정 비용이 사라진다.
- * 의도적으로 렌더 중 ref를 읽으므로 react-hooks/refs 룰을 이 파일에서 비활성화한다.
+ * (렌더 중 engineRef/paintCache ref를 의도적으로 읽어 매 프레임 최신 상태를 그린다.)
  */
-/* eslint-disable react-hooks/refs */
 import {
   Canvas,
   createPicture,
@@ -18,7 +17,7 @@ import {
   type SkCanvas,
   type SkPaint,
 } from '@shopify/react-native-skia';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import {
   BattleEngine,
@@ -68,13 +67,11 @@ interface Props {
   heroDef: HeroDef;
   speed: number;
   running: boolean;
-  /** 0~1 — 타워 외관 단계 (프로토타입: 색상 변화) */
-  towerPct: number;
   /** 매 프레임 호출: 엔진 동기화 + 타이머 (dt = 실제 경과 초) */
   onFrame?: (engine: BattleEngine, dt: number) => void;
 }
 
-export function BattleField({ config, heroDef, speed, running, towerPct, onFrame }: Props) {
+export const BattleField = memo(function BattleField({ config, heroDef, speed, running, onFrame }: Props) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const engineRef = useRef<BattleEngine | null>(null);
   const [, setFrame] = useState(0);
@@ -133,6 +130,8 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
   const scale = size.w / engine.field.width;
   const { towerX, towerY, towerRadius } = engine.field;
 
+  // 타워 외관 단계(색상)는 엔진 ref에서 직접 — 부모가 towerHp를 구독할 필요 없음
+  const towerPct = config.tower.hp > 0 ? engine.towerHp / config.tower.hp : 0;
   const towerColor =
     towerPct > 0.6
       ? 'rgba(220,70,70,0.45)'
@@ -267,7 +266,7 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
       </Canvas>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
