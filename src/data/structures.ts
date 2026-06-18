@@ -33,12 +33,13 @@ export const TRAP_TRIGGER = {
 
 /** 스테이지별 구조물 수량 (설계 11) */
 export function structureCounts(stage: number): { walls: number; barricades: number; traps: number } {
-  if (stage <= 5) return { walls: 2, barricades: 3, traps: 2 };
-  if (stage <= 10) return { walls: 4, barricades: 5, traps: 4 };
-  if (stage <= 15) return { walls: 4, barricades: 7, traps: 6 };
-  if (stage <= 20) return { walls: 4, barricades: 9, traps: 8 };
-  if (stage <= 25) return { walls: 4, barricades: 12, traps: 10 };
-  return { walls: 4, barricades: 15, traps: 12 };
+  // 전 구간 약 2배 증가 — 방어선 강화 (폰 피드백 4: 구조물 더 많이)
+  if (stage <= 5) return { walls: 3, barricades: 6, traps: 4 };
+  if (stage <= 10) return { walls: 5, barricades: 10, traps: 8 };
+  if (stage <= 15) return { walls: 6, barricades: 14, traps: 12 };
+  if (stage <= 20) return { walls: 6, barricades: 18, traps: 16 };
+  if (stage <= 25) return { walls: 6, barricades: 22, traps: 18 };
+  return { walls: 6, barricades: 26, traps: 20 };
 }
 
 /** 구조물 HP 스케일: × (1 + 0.1 × 스테이지) */

@@ -260,9 +260,10 @@ interface PendingStrike {
 }
 
 /** 적 동시 생존 캡 — 붕괴 구간 동안 무한 적립된 주둔군이 공략 불가가 되는 것 방지 (+모바일 성능) */
-// 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화, 피드백). 폰 성능 끊기면 100으로 하향
-const ENEMY_MAX_ALIVE = 150;
-const ALLY_MAX_ALIVE = 150;
+// 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화, 피드백). 폰 성능 끊기면 200으로 하향
+// 250으로 상향 (피드백 7: 유닛이 끊기지 않고 계속 나오게)
+const ENEMY_MAX_ALIVE = 250;
+const ALLY_MAX_ALIVE = 250;
 /** 유닛 카드 보유 시 기본 초당 생성률 — 물량 스트림으로 전선 상시 유지 (모여서 출발 대신 연속 젠) */
 const ALLY_SPAWN_BASE = 2.0;
 /** 유닛 카드 1장당 추가 생성률 (설계 07: 카드마다 독립 생성) */
@@ -304,6 +305,14 @@ const TAUNT_RADIUS = 6;
 const PIERCE_RADIUS = 3.5;
 /** 돌진: 교전 접근 이동 속도 배수 */
 const CHARGE_MOVE_MULT = 1.3;
+/** 유닛 분산: 아군끼리 이 거리 이하면 서로 밀어냄 (뭉침 방지 — 피드백 1·9) */
+const SEPARATION_RADIUS = 5;
+/** 분산 강도 (한 틱당 최대 밀어내기 거리 계수) */
+const SEPARATION_FORCE = 0.5;
+/** 투석기 발사 준비 시간 (초) — 배치 직후 즉시 사격 방지 (피드백 8) */
+const CATAPULT_WIND_UP = 3.0;
+/** 이 시간(초) 경과 후 경험치 2배 (피드백 6: 장기전 보상) */
+const LATE_GAME_EXP_TIME = 300;
 /** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 7) */
 const VALOR_RADIUS = 34;
 /** 수호 오라(방패병 Lv5): 이 반경 내 아군 피해감소 (카드 개편) */
@@ -567,6 +576,7 @@ export class BattleEngine {
     this.updatePendingStrikes(dt);
     this.updateAuras();
     this.act(dt);
+    this.applySeparation();
     this.updateProjectiles(dt);
     this.updateTraps();
     this.removeDead();
@@ -694,7 +704,8 @@ export class BattleEngine {
       frenzyAtkPct: m?.frenzyAtkPct ?? 0,
       stunLeft: 0,
       projectileSpeed: def.projectileSpeed ?? 0,
-      attackCd: Math.random() * 0.5,
+      // 투석기: 배치 직후 준비시간 후 첫 발사 (피드백 8)
+      attackCd: unitId === 'catapult' ? CATAPULT_WIND_UP + Math.random() : Math.random() * 0.5,
       retargetCd: Math.random() * 0.2,
       targetId: NO_TARGET,
       state: 'moving',
@@ -1623,7 +1634,9 @@ export class BattleEngine {
 
   private gainExp(baseExp: number) {
     const cardBoost = 1 + this.cards.expPct / 100;
-    this.totalExp += Math.round(baseExp * this.config.expMultiplier * cardBoost);
+    // 5분 경과 후 경험치 2배 (피드백 6: 장기전 성장 가속)
+    const timeMult = this.time >= LATE_GAME_EXP_TIME ? 2 : 1;
+    this.totalExp += Math.round(baseExp * this.config.expMultiplier * cardBoost * timeMult);
     while (this.totalExp >= expTotalForLevel(this.level + 1)) {
       this.level++;
       this.pendingPicks++;
@@ -1740,7 +1753,37 @@ export class BattleEngine {
     }
   }
 
-  // ── 정리 ──────────────────────────────────────────────
+  // ── 분산 / 정리 ────────────────────────────────────────
+
+  /**
+   * 아군 유닛 뭉침 방지 (피드백 1·9): 가까운 아군끼리 서로 밀어냄.
+   * 영웅/구조물 제외. 원거리 화력 과집중·공성 광역 취약 완화.
+   */
+  private applySeparation() {
+    const entities = this.entities;
+    const len = entities.length;
+    const { width, height } = this.field;
+    for (let i = 0; i < len; i++) {
+      const a = entities[i];
+      if (a.state === 'dead' || a.side !== 'ally' || a.kind === 'hero' || isStructure(a.kind)) continue;
+      for (let j = i + 1; j < len; j++) {
+        const b = entities[j];
+        if (b.state === 'dead' || b.side !== 'ally' || b.kind === 'hero' || isStructure(b.kind)) continue;
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < SEPARATION_RADIUS && dist > 0.01) {
+          const push = ((SEPARATION_RADIUS - dist) / SEPARATION_RADIUS) * SEPARATION_FORCE;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          a.x = Math.min(width - 3, Math.max(3, a.x + nx * push));
+          a.y = Math.min(height - 3, Math.max(3, a.y + ny * push));
+          b.x = Math.min(width - 3, Math.max(3, b.x - nx * push));
+          b.y = Math.min(height - 3, Math.max(3, b.y - ny * push));
+        }
+      }
+    }
+  }
 
   private removeDead() {
     let needsClean = false;
