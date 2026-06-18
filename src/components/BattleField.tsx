@@ -1,11 +1,23 @@
 /*
  * 게임 루프 아키텍처: BattleEngine은 순수 TS 클래스로 ref(engineRef)에 보관하고,
  * 매 틱 setFrame으로 강제 리렌더하면서 렌더 중 엔진 상태(수백 엔티티)를 읽어 Skia로 그린다.
- * 이를 React state로 스냅샷하면 60fps×수백 객체 할당이라 모바일 성능이 무너진다.
- * 따라서 의도적으로 렌더 중 ref를 읽으므로 react-hooks/refs 룰을 이 파일에서 비활성화한다.
+ *
+ * 렌더링: 엔티티 하나당 <Circle> React 엘리먼트를 쓰면 매 프레임 수백 노드를
+ * React가 재조정(reconcile)해야 해서 모바일에서 프레임이 초 단위로 무너진다.
+ * 따라서 모든 엔티티를 단일 <Picture>의 명령형 드로잉 루프(canvas.drawCircle)로 그린다.
+ * React 트리는 <Canvas><Picture/></Canvas> 2노드뿐이라 재조정 비용이 사라진다.
+ * 의도적으로 렌더 중 ref를 읽으므로 react-hooks/refs 룰을 이 파일에서 비활성화한다.
  */
 /* eslint-disable react-hooks/refs */
-import { Canvas, Circle, Group } from '@shopify/react-native-skia';
+import {
+  Canvas,
+  createPicture,
+  PaintStyle,
+  Picture,
+  Skia,
+  type SkCanvas,
+  type SkPaint,
+} from '@shopify/react-native-skia';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import {
@@ -68,6 +80,8 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
   const [, setFrame] = useState(0);
   const onFrameRef = useRef(onFrame);
   onFrameRef.current = onFrame;
+  // 색상별 Paint 캐시 — 프레임 간 재사용 (Skia.Paint 생성 비용 회피)
+  const paintCache = useRef<Map<string, SkPaint>>(new Map());
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -140,169 +154,116 @@ export function BattleField({ config, heroDef, speed, running, towerPct, onFrame
   const hero = engine.hero;
   const heroDead = hero.state === 'dead';
 
+  // 모든 엔티티를 단일 Picture에 명령형으로 그린다 (React 재조정 회피)
+  const picture = createPicture((canvas: SkCanvas) => {
+    const cache = paintCache.current;
+    const fill = (color: string): SkPaint => {
+      const key = `f|${color}`;
+      let p = cache.get(key);
+      if (!p) {
+        p = Skia.Paint();
+        p.setAntiAlias(true);
+        p.setColor(Skia.Color(color));
+        cache.set(key, p);
+      }
+      return p;
+    };
+    const stroke = (color: string, width: number): SkPaint => {
+      const key = `s|${color}|${width}`;
+      let p = cache.get(key);
+      if (!p) {
+        p = Skia.Paint();
+        p.setAntiAlias(true);
+        p.setStyle(PaintStyle.Stroke);
+        p.setStrokeWidth(width);
+        p.setColor(Skia.Color(color));
+        cache.set(key, p);
+      }
+      return p;
+    };
+
+    // 적 타워 (원형 영역)
+    canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * scale, fill('rgba(180,50,50,0.14)'));
+    canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * scale, stroke(towerColor, 2));
+    canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * 0.45 * scale, fill('rgba(220,80,80,0.5)'));
+    if (engine.towerFlash > 0) {
+      canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * scale, fill('rgba(255,90,90,0.45)'));
+    }
+
+    // 구조물: 성벽/바리케이트/트랩
+    for (const e of structures) {
+      const v = UNIT_VISUALS[e.kind];
+      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, fill(v.color));
+    }
+
+    // 적 유닛
+    for (const e of enemies) {
+      const v = UNIT_VISUALS[e.kind];
+      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, fill(e.hitFlash > 0 ? HIT_COLOR : v.color));
+    }
+
+    // 아군 유닛 (채움 + 시안 테두리)
+    for (const e of allies) {
+      const v = UNIT_VISUALS[e.kind];
+      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, fill(e.hitFlash > 0 ? HIT_COLOR : v.color));
+    }
+    for (const e of allies) {
+      const v = UNIT_VISUALS[e.kind];
+      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, stroke(ALLY_STROKE, 1.2));
+    }
+
+    // 투사체 (투석기 돌덩이)
+    for (const p of engine.projectiles) {
+      canvas.drawCircle(p.x * scale, p.y * scale, 1.1 * scale, fill(PROJECTILE_COLOR));
+    }
+
+    // 스킬/광역 연출 — 경고(텔레그래프)는 고정 반경 위험존, 타격은 퍼지는 링
+    // (효과는 소수라 프레임당 일시 Paint 생성 허용 — 동적 알파 때문)
+    for (const fx of engine.effects) {
+      const progress = 1 - fx.life / fx.maxLife; // 0→1 (경고: 임박할수록 1)
+      if (fx.warning) {
+        const inner = Skia.Paint();
+        inner.setAntiAlias(true);
+        inner.setColor(Skia.Color(fx.color));
+        inner.setAlphaf(Math.min(1, 0.12 + progress * 0.33));
+        canvas.drawCircle(fx.x * scale, fx.y * scale, fx.maxRadius * scale, inner);
+        const ring = Skia.Paint();
+        ring.setAntiAlias(true);
+        ring.setStyle(PaintStyle.Stroke);
+        ring.setStrokeWidth(2.5);
+        ring.setColor(Skia.Color(fx.color));
+        ring.setAlphaf(Math.min(1, 0.5 + progress * 0.5));
+        canvas.drawCircle(fx.x * scale, fx.y * scale, fx.maxRadius * scale, ring);
+      } else {
+        const ring = Skia.Paint();
+        ring.setAntiAlias(true);
+        ring.setStyle(PaintStyle.Stroke);
+        ring.setStrokeWidth(2.5);
+        ring.setColor(Skia.Color(fx.color));
+        ring.setAlphaf(Math.max(0, Math.min(1, fx.life / fx.maxLife)));
+        canvas.drawCircle(fx.x * scale, fx.y * scale, fx.maxRadius * progress * scale, ring);
+      }
+    }
+
+    // 아군 영웅
+    const heroColor = heroDead
+      ? 'rgba(120,120,140,0.5)'
+      : hero.hitFlash > 0
+        ? HIT_COLOR
+        : 'rgba(100,180,255,0.9)';
+    canvas.drawCircle(hero.x * scale, hero.y * scale, engine.field.heroRadius * scale, fill(heroColor));
+    canvas.drawCircle(
+      hero.x * scale,
+      hero.y * scale,
+      engine.field.heroRadius * scale,
+      stroke(heroDead ? 'rgba(150,150,170,0.5)' : 'rgba(160,220,255,0.9)', 1.5),
+    );
+  });
+
   return (
     <View style={styles.fill} onLayout={onLayout}>
       <Canvas style={styles.fill}>
-        {/* 적 타워 (원형 영역) */}
-        <Circle
-          cx={towerX * scale}
-          cy={towerY * scale}
-          r={towerRadius * scale}
-          color="rgba(180,50,50,0.14)"
-        />
-        <Circle
-          cx={towerX * scale}
-          cy={towerY * scale}
-          r={towerRadius * scale}
-          color={towerColor}
-          style="stroke"
-          strokeWidth={2}
-        />
-        <Circle
-          cx={towerX * scale}
-          cy={towerY * scale}
-          r={towerRadius * 0.45 * scale}
-          color="rgba(220,80,80,0.5)"
-        />
-        {/* 타워 피격 플래시 */}
-        {engine.towerFlash > 0 && (
-          <Circle
-            cx={towerX * scale}
-            cy={towerY * scale}
-            r={towerRadius * scale}
-            color="rgba(255,90,90,0.45)"
-          />
-        )}
-
-        {/* 구조물: 성벽/바리케이트/트랩 */}
-        {structures.map((e) => {
-          const v = UNIT_VISUALS[e.kind];
-          return (
-            <Circle
-              key={e.id}
-              cx={e.x * scale}
-              cy={e.y * scale}
-              r={v.radius * scale}
-              color={v.color}
-            />
-          );
-        })}
-
-        {/* 적 유닛 */}
-        {enemies.map((e) => {
-          const v = UNIT_VISUALS[e.kind];
-          return (
-            <Circle
-              key={e.id}
-              cx={e.x * scale}
-              cy={e.y * scale}
-              r={v.radius * scale}
-              color={e.hitFlash > 0 ? HIT_COLOR : v.color}
-            />
-          );
-        })}
-
-        {/* 아군 유닛 (시안 테두리로 구분) */}
-        {allies.map((e) => {
-          const v = UNIT_VISUALS[e.kind];
-          return (
-            <Circle
-              key={e.id}
-              cx={e.x * scale}
-              cy={e.y * scale}
-              r={v.radius * scale}
-              color={e.hitFlash > 0 ? HIT_COLOR : v.color}
-            />
-          );
-        })}
-        {allies.map((e) => {
-          const v = UNIT_VISUALS[e.kind];
-          return (
-            <Circle
-              key={`s${e.id}`}
-              cx={e.x * scale}
-              cy={e.y * scale}
-              r={v.radius * scale}
-              color={ALLY_STROKE}
-              style="stroke"
-              strokeWidth={1.2}
-            />
-          );
-        })}
-
-        {/* 투사체 (투석기 돌덩이) */}
-        {engine.projectiles.map((p) => (
-          <Circle
-            key={`p${p.id}`}
-            cx={p.x * scale}
-            cy={p.y * scale}
-            r={1.1 * scale}
-            color={PROJECTILE_COLOR}
-          />
-        ))}
-
-        {/* 스킬/광역 연출 — 경고(텔레그래프)는 고정 반경 위험존, 타격은 퍼지는 링 */}
-        {engine.effects.map((fx) => {
-          const progress = 1 - fx.life / fx.maxLife; // 0→1 (경고: 임박할수록 1)
-          if (fx.warning) {
-            // 시전 경고: 고정 반경 위험존 — 외곽선 + 점점 진해지는 내부 (임박 신호)
-            return (
-              <Group key={`fx${fx.id}`}>
-                <Circle
-                  cx={fx.x * scale}
-                  cy={fx.y * scale}
-                  r={fx.maxRadius * scale}
-                  color={fx.color}
-                  opacity={0.12 + progress * 0.33}
-                />
-                <Circle
-                  cx={fx.x * scale}
-                  cy={fx.y * scale}
-                  r={fx.maxRadius * scale}
-                  color={fx.color}
-                  style="stroke"
-                  strokeWidth={2.5}
-                  opacity={0.5 + progress * 0.5}
-                />
-              </Group>
-            );
-          }
-          // 타격: 퍼지며 사라지는 링
-          return (
-            <Circle
-              key={`fx${fx.id}`}
-              cx={fx.x * scale}
-              cy={fx.y * scale}
-              r={fx.maxRadius * progress * scale}
-              color={fx.color}
-              style="stroke"
-              strokeWidth={2.5}
-              opacity={fx.life / fx.maxLife}
-            />
-          );
-        })}
-
-        {/* 아군 영웅 */}
-        <Circle
-          cx={hero.x * scale}
-          cy={hero.y * scale}
-          r={engine.field.heroRadius * scale}
-          color={
-            heroDead
-              ? 'rgba(120,120,140,0.5)'
-              : hero.hitFlash > 0
-                ? HIT_COLOR
-                : 'rgba(100,180,255,0.9)'
-          }
-        />
-        <Circle
-          cx={hero.x * scale}
-          cy={hero.y * scale}
-          r={engine.field.heroRadius * scale}
-          color={heroDead ? 'rgba(150,150,170,0.5)' : 'rgba(160,220,255,0.9)'}
-          style="stroke"
-          strokeWidth={1.5}
-        />
+        <Picture picture={picture} />
       </Canvas>
     </View>
   );
