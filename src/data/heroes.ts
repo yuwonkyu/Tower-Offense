@@ -13,9 +13,9 @@ export const HEROES: HeroDef[] = [
     id: 'maruhan',
     name: '마루한',
     concept: '돌격대장 (탱커/근접 광역)',
-    // 폰 피드백: 즉사 방지 체력/방어 2배 (160→320 / 35→70) + 영웅 체젠(엔진 1%/s). x3은 밸런스 붕괴로 x2 하향
-    stats: { atk: 30, def: 70, hp: 320, moveSpeed: 6, range: 2, atkSpeed: 1.2, aoe: 2 },
-    growth: { atk: 1, def: 2, hp: 8, atkSpeed: 0.02 },
+    // 고기본·저성장 개편: 영웅 단독으로 기본 클리어력 확보 (기본 스탯 대폭↑, 레벨 성장은 소폭↓)
+    stats: { atk: 56, def: 92, hp: 540, moveSpeed: 6, range: 2, atkSpeed: 1.2, aoe: 2.4 },
+    growth: { atk: 1, def: 1.3, hp: 5, atkSpeed: 0.015 },
     skill: {
       name: '용맹',
       description: '1분간 주변 아군 전체 + 자신의 모든 스탯 % 증가 (광역 버프형)',
@@ -34,9 +34,9 @@ export const HEROES: HeroDef[] = [
     id: 'mir',
     name: '미르',
     concept: '궁사 (원거리)',
-    // 원거리 사거리 ×0.6 재조정 (25→15) · 체력/방어 2배 (120→240 / 15→30)
-    stats: { atk: 35, def: 30, hp: 240, moveSpeed: 6.5, range: 15, atkSpeed: 1.4, aoe: 1 },
-    growth: { atk: 2, def: 1, hp: 5, atkSpeed: 0.03 },
+    // 고기본·저성장 개편 (원거리 사거리 15 유지)
+    stats: { atk: 60, def: 44, hp: 400, moveSpeed: 6.5, range: 15, atkSpeed: 1.4, aoe: 1 },
+    growth: { atk: 1.4, def: 0.7, hp: 3.5, atkSpeed: 0.022 },
     skill: {
       name: '살소나기',
       description: '광역 범위에 화살비 (150% 피해)',
@@ -54,9 +54,9 @@ export const HEROES: HeroDef[] = [
     id: 'noeul',
     name: '노을',
     concept: '암살자',
-    // 체력/방어 2배 (130→260 / 15→30)
-    stats: { atk: 35, def: 30, hp: 260, moveSpeed: 7, range: 1, atkSpeed: 2, aoe: 1 },
-    growth: { atk: 2, def: 1, hp: 6, atkSpeed: 0.04 },
+    // 고기본·저성장 개편
+    stats: { atk: 62, def: 44, hp: 420, moveSpeed: 7, range: 1, atkSpeed: 2, aoe: 1 },
+    growth: { atk: 1.4, def: 0.7, hp: 4, atkSpeed: 0.03 },
     skill: {
       name: '피노을',
       description: '지정 위치로 이동 + 광역 피해(130%) + 공격력 디버프',
