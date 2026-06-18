@@ -15,11 +15,13 @@ const STAT_LABELS: { key: keyof HeroStatAlloc; label: string; unit: string }[] =
 export default function HeroesScreen() {
   const getHeroMeta = useProgressStore((s) => s.getHeroMeta);
   const investHeroStat = useProgressStore((s) => s.investHeroStat);
-  const upgradeHeroSkill = useProgressStore((s) => s.upgradeHeroSkill);
   const resetHeroStats = useProgressStore((s) => s.resetHeroStats);
   const diamonds = useProgressStore((s) => s.diamonds);
   const selectedHeroId = useProgressStore((s) => s.selectedHeroId);
   const selectHero = useProgressStore((s) => s.selectHero);
+  // 스탯/EXP 변경 시 화면 즉시 갱신 (getHeroMeta는 함수 참조라 그 자체로는 리렌더를 트리거하지 않음 — 피드백 5)
+  useProgressStore((s) => s.heroExp);
+  useProgressStore((s) => s.heroInvestedStats);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -93,12 +95,10 @@ export default function HeroesScreen() {
                 </View>
               ))}
 
-              {/* 스킬 레벨 */}
+              {/* 스킬 레벨 (자동 — 5레벨마다 +1, 피드백 6) */}
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionLabel}>스킬</Text>
-                <Text style={[styles.ptsLeft, meta.skillPtsAvailable > 0 && styles.ptsAvail]}>
-                  {meta.skillPtsAvailable}pt 남음
-                </Text>
+                <Text style={styles.ptsLeft}>자동 레벨업 · 5레벨마다 +1</Text>
               </View>
               <View style={styles.skillRow}>
                 <View style={styles.skillInfo}>
@@ -106,13 +106,6 @@ export default function HeroesScreen() {
                   <Text style={styles.skillDesc}>{hero.skill.description}</Text>
                   <Text style={styles.skillLv}>Lv.{meta.skillLevel} — 계수 {(hero.skill.ratio * (1 + (meta.skillLevel - 1) * 0.02) * 100).toFixed(0)}%</Text>
                 </View>
-                <Pressable
-                  style={[styles.skillBtn, meta.skillPtsAvailable <= 0 && styles.plusBtnDisabled]}
-                  onPress={() => upgradeHeroSkill(hero.id)}
-                  disabled={meta.skillPtsAvailable <= 0}
-                >
-                  <Text style={styles.skillBtnText}>강화</Text>
-                </Pressable>
               </View>
 
               {/* 패시브 (상시) */}

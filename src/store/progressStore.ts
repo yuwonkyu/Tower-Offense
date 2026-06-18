@@ -212,11 +212,10 @@ export const useProgressStore = create<ProgressState>()(
         const statPtsEarned = level - 1;
         const statPtsAvailable = statPtsEarned - usedStatPts;
 
-        const skillLv = s.heroSkillLevel[heroId] ?? 1;
-        const skillPtsEarned = Math.floor((level - 1) / 5);
-        const skillPtsAvailable = skillPtsEarned - (skillLv - 1);
+        // 스킬은 자동 레벨업 — 5레벨마다 +1 (스킬이 1개뿐이라 수동 분배 불필요, 피드백 6)
+        const skillLevel = 1 + Math.floor((level - 1) / 5);
 
-        return { level, expInLevel, expToNext, statPtsAvailable, skillPtsAvailable, invested, skillLevel: skillLv };
+        return { level, expInLevel, expToNext, statPtsAvailable, skillPtsAvailable: 0, invested, skillLevel };
       },
 
       investHeroStat: (heroId, stat) => {

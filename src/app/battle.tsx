@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AdStubModal } from '@/components/AdStubModal';
 import { BattleField } from '@/components/BattleField';
@@ -72,6 +72,21 @@ export default function BattleScreen() {
   useEffect(() => {
     pausedRef.current = adKind !== null || menuOpen;
   }, [adKind, menuOpen]);
+
+  // 안드로이드 뒤로가기 → 홈으로 바로 나가지 않고 일시정지(설정) 메뉴를 연다 (피드백 1)
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (adKind !== null) return true; // 광고 모달 중: 무시
+      if (menuOpen) {
+        setMenuOpen(false); // 이미 열려 있으면 닫기
+        return true;
+      }
+      if (phase === 'victory' || phase === 'defeat') return false; // 정산 화면: 기본 뒤로(홈)
+      setMenuOpen(true); // 전투/카드선택/안내 중: 설정창 열기
+      return true;
+    });
+    return () => sub.remove();
+  }, [adKind, menuOpen, phase]);
 
   /**
    * HUD 동기화 스로틀 누적기. 엔진 시뮬/캔버스는 BattleField가 매 프레임(60Hz) 그리지만,

@@ -1,11 +1,23 @@
-import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { cardById } from '@/data/cards';
 import type { HeroDef } from '@/game/types';
 import { useBattleStore } from '@/store/battleStore';
 
 const CARD_SLOTS = 8;
+
+interface HeroStatsSnap {
+  atk: number;
+  def: number;
+  hp: number;
+  maxHp: number;
+  atkSpeed: number;
+  crit: number;
+  evade: number;
+  moveSpeed: number;
+  range: number;
+}
 
 interface Props {
   hero: HeroDef;
@@ -30,17 +42,47 @@ export const HeroPanel = memo(function HeroPanel({ hero, onUseSkill }: Props) {
   const skillReady = skillCooldown <= 0;
   const cardIds = Object.keys(pickedCards);
 
+  // 영웅 프로필 길게 누르면 현재 스탯 스냅샷 표시 (피드백 8)
+  const [stats, setStats] = useState<HeroStatsSnap | null>(null);
+  const openStats = () => {
+    const h = useBattleStore.getState().engine?.hero;
+    if (!h) return;
+    setStats({
+      atk: h.atk,
+      def: h.def,
+      hp: h.hp,
+      maxHp: h.maxHp,
+      atkSpeed: h.atkSpeed,
+      crit: h.critChance,
+      evade: h.evade,
+      moveSpeed: h.moveSpeed,
+      range: h.range,
+    });
+  };
+  const statRows: [string, string | number][] = stats
+    ? [
+        ['공격력', Math.round(stats.atk)],
+        ['방어력', Math.round(stats.def)],
+        ['체력', `${Math.ceil(stats.hp)} / ${Math.round(stats.maxHp)}`],
+        ['공격속도', stats.atkSpeed.toFixed(2)],
+        ['치명타', `${Math.round(stats.crit * 100)}%`],
+        ['회피', `${Math.round(stats.evade * 100)}%`],
+        ['이동속도', stats.moveSpeed.toFixed(1)],
+        ['사거리', stats.range.toFixed(1)],
+      ]
+    : [];
+
   return (
     <View style={styles.bottomPanel}>
       <View style={styles.bottomRow}>
-        <View style={styles.heroIcon}>
+        <Pressable style={styles.heroIcon} onLongPress={openStats} delayLongPress={250}>
           <Text style={styles.heroIconText}>{hero.name[0]}</Text>
           {reviveLeft > 0 && (
             <View style={styles.reviveOverlay}>
               <Text style={styles.reviveText}>{Math.ceil(reviveLeft)}</Text>
             </View>
           )}
-        </View>
+        </Pressable>
 
         <View style={styles.heroInfo}>
           <View style={styles.heroInfoRow}>
@@ -90,6 +132,24 @@ export const HeroPanel = memo(function HeroPanel({ hero, onUseSkill }: Props) {
       <Text style={styles.expText}>
         EXP {exp.toLocaleString()} / {expToNext.toLocaleString()}
       </Text>
+
+      {/* 영웅 스탯 스냅샷 (길게 누르기) */}
+      <Modal visible={stats !== null} transparent animationType="fade" onRequestClose={() => setStats(null)}>
+        <Pressable style={styles.statBackdrop} onPress={() => setStats(null)}>
+          <View style={styles.statCard}>
+            <Text style={styles.statTitle}>{hero.name} · 현재 스탯</Text>
+            <View style={styles.statGrid}>
+              {statRows.map(([k, v]) => (
+                <View key={k} style={styles.statItem}>
+                  <Text style={styles.statKey}>{k}</Text>
+                  <Text style={styles.statVal}>{v}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.statHint}>아무 곳이나 탭하여 닫기</Text>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 });
@@ -190,4 +250,37 @@ const styles = StyleSheet.create({
     color: '#5a8fc0',
     paddingVertical: 4,
   },
+  statBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statCard: {
+    width: '78%',
+    backgroundColor: Colors.panel,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(120,200,255,0.4)',
+    padding: 16,
+    gap: 10,
+  },
+  statTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(160,220,255,0.95)',
+    textAlign: 'center',
+  },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  statItem: {
+    width: '50%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+  },
+  statKey: { fontSize: 12, color: Colors.textSub },
+  statVal: { fontSize: 12, fontWeight: '700', color: Colors.textMain },
+  statHint: { fontSize: 10, color: Colors.textDim, textAlign: 'center', marginTop: 2 },
 });
+
