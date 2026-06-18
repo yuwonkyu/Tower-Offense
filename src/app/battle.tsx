@@ -92,6 +92,13 @@ export default function BattleScreen() {
     pausedRef.current = adKind !== null || menuOpen;
   }, [adKind, menuOpen]);
 
+  /**
+   * HUD 동기화 스로틀 누적기. 엔진 시뮬/캔버스는 BattleField가 매 프레임(60Hz) 그리지만,
+   * 스토어(→HUD 리렌더)는 ~10Hz로만 갱신해 전체 화면 리렌더 폭주를 막는다.
+   * (HP바/카운트/타이머는 60fps가 불필요 — 이게 폰 프레임 붕괴의 주원인이었음)
+   */
+  const syncAccumRef = useRef(0);
+
   const retryStage = () => {
     router.replace({ pathname: '/battle', params: { stage: stageNum, difficulty: diff } });
   };
@@ -150,8 +157,13 @@ export default function BattleScreen() {
   const handleFrame = useCallback((engine: BattleEngine, dt: number) => {
     // 광고/일시정지 메뉴 중에는 틱·카드 선택 타이머 정지 (피드백 8·9)
     if (pausedRef.current) return;
+    // HUD 동기화 ~10Hz 스로틀 — 누적 dt로 타이머 정확도 유지 (매 프레임 set→전체 리렌더 방지)
+    syncAccumRef.current += dt;
+    if (syncAccumRef.current < 0.1) return;
+    const acc = syncAccumRef.current;
+    syncAccumRef.current = 0;
     const store = useBattleStore.getState();
-    store.tick(dt);
+    store.tick(acc);
     store.syncFromEngine(engine);
   }, []);
 
