@@ -362,6 +362,8 @@ const CATAPULT_WIND_UP = 3.0;
 const LATE_GAME_EXP_TIME = 300;
 /** 원거리 공격자 판정 기준 (피해 반감·회피 적용) — 타깃 우선순위 RANGED_THRESHOLD와 별개 */
 const RANGED_ATK_RANGE = 5;
+/** 투석기 최소 사거리 — 이보다 가까운 적은 타격 안 함 (공성 무기 — 먼 적/구조물 위주, 피드백) */
+const CATAPULT_MIN_RANGE = 6;
 /** 생존 적 이 수 이하일 때 공성(타워) 피해 배수 (섬멸 마무리 보상) */
 const SIEGE_CLEANUP_THRESHOLD = 30;
 const SIEGE_CLEANUP_MULT = 1.5;
@@ -1260,6 +1262,16 @@ export class BattleEngine {
   private acquireAllyTarget(e: CombatEntity) {
     const reach = Math.max(e.range, 1) + BODY_RADIUS;
 
+    // 투석기 = 공성 전문: 타워가 사거리 내면 우선 포격 (성에 가까우니까), 코앞 적은 무시 (피드백)
+    if (e.kind === 'catapult') {
+      const tDist =
+        Math.hypot(this.field.towerX - e.x, this.field.towerY - e.y) - this.field.towerRadius;
+      if (tDist <= e.range) {
+        e.targetId = TOWER_TARGET;
+        return;
+      }
+    }
+
     // 1) 사거리 내 적 유닛
     let best: CombatEntity | null = null;
     let bestScore = Infinity;
@@ -1267,6 +1279,7 @@ export class BattleEngine {
       if (c.side === 'ally' || c.state === 'dead' || isStructure(c.kind)) continue;
       const dist = Math.hypot(c.x - e.x, c.y - e.y);
       if (dist > reach) continue;
+      if (e.kind === 'catapult' && dist < CATAPULT_MIN_RANGE) continue; // 최소 사거리 — 먼 적만 타격
       let score = dist;
       if (e.priority === 'tank') score -= c.def * 0.5;
       if (e.priority === 'ranged' && c.range >= RANGED_THRESHOLD) score -= 30;
