@@ -100,6 +100,16 @@ export interface CombatEntity {
   priority: TargetPriority;
   /** 회피율 0~1 (암살자 기본 0.3) */
   evade: number;
+  /** 원거리 공격 피해 감소 0~1 (방패병 0.4, 검사 0.3) */
+  rangedDmgReduction: number;
+  /** 공성(타워/구조물) 피해 배수 (마법사·암살자 감소, 기본 1.0) */
+  siegeDmgMult: number;
+  /** 유닛 대상 공격력 배수 (암살자 1.6, 마법사 1.3, 기본 1.0) */
+  vsUnitMult: number;
+  /** 원거리 유닛 대상 공격력 배수 (기마병 1.5, 기본 1.0) */
+  vsRangedUnitMult: number;
+  /** 원거리 공격에 대한 추가 회피율 (암살자 +0.3) */
+  evadeVsRanged: number;
   /** 처치 시 경험치 (적측만 의미, 배수 적용 전) */
   killExp: number;
   /** 치명타 확률 0~1 (배수 1.5배) */
@@ -162,6 +172,18 @@ export interface CombatEntity {
   healBonus: number;
   /** 일격 즉사 확률 0~1 (암살자 Lv5) */
   executeChance: number;
+  /** 피해 반사 0~1 — 받은 피해의 일부를 공격자에게 (방어력 카드 MAX) */
+  reflect: number;
+  /** 가시 0~1 — 피격 시 주변 적에게 자신 최대체력 % 광역 (체력 카드 MAX) */
+  thorns: number;
+  /** 가시 발동 쿨타임 남은 시간 (초) — 매 틱 빈발 방지 */
+  thornsCd: number;
+  /** 카운터 0~ — 회피 시 공격자에게 공격력 배수 피해 (회피율 카드 MAX) */
+  counter: number;
+  /** 코인 폭발 0~ — 처치 시 주변 적에게 공격력 배수 광역 (골드 카드) */
+  coinBlast: number;
+  /** 처치 시 랜덤 일반 적 즉사 확률 0~1 (골드 카드 MAX) */
+  goldExecute: number;
   /** 피격 플래시 남은 시간 (초) — 타격감 연출, 렌더 전용 */
   hitFlash: number;
   /** 폭탄병 폭발 1회 처리 플래그 (자폭/요격사망 중복 폭발 방지) */
@@ -207,12 +229,24 @@ function zeroProcFields() {
     multishot: 0,
     healBonus: 0,
     executeChance: 0,
+    reflect: 0,
+    thorns: 0,
+    thornsCd: 0,
+    counter: 0,
+    coinBlast: 0,
+    goldExecute: 0,
     hitFlash: 0,
     noHeal: false,
     bleedLeft: 0,
     bleedRate: 0,
     burnLeft: 0,
     burnRate: 0,
+    // 역할 기본값 (직업 특성 시스템 — makeUnit에서 직업별 오버라이드)
+    rangedDmgReduction: 0,
+    siegeDmgMult: 1,
+    vsUnitMult: 1,
+    vsRangedUnitMult: 1,
+    evadeVsRanged: 0,
   };
 }
 
@@ -326,10 +360,24 @@ const SEPARATION_FORCE = 0.5;
 const CATAPULT_WIND_UP = 3.0;
 /** 이 시간(초) 경과 후 경험치 2배 (피드백 6: 장기전 보상) */
 const LATE_GAME_EXP_TIME = 300;
+/** 원거리 공격자 판정 기준 (피해 반감·회피 적용) — 타깃 우선순위 RANGED_THRESHOLD와 별개 */
+const RANGED_ATK_RANGE = 5;
+/** 생존 적 이 수 이하일 때 공성(타워) 피해 배수 (섬멸 마무리 보상) */
+const SIEGE_CLEANUP_THRESHOLD = 20;
+const SIEGE_CLEANUP_MULT = 1.5;
 /** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 7) */
 const VALOR_RADIUS = 34;
 /** 수호 오라(방패병 Lv5): 이 반경 내 아군 피해감소 (카드 개편) */
 const SHIELD_AURA_RADIUS = 12;
+/** 치유사 내재 수호 오라 — 주변 아군 받는 피해 감소 0~1 (아군·적 공통) */
+const HEALER_AURA_DR = 0.15;
+/** 가시(체력 카드 MAX): 피격 광역 반경 + 발동 쿨타임(초) — 매 틱 빈발 방지 */
+const THORNS_RADIUS = 6;
+const THORNS_CD = 0.5;
+/** 코인 폭발(골드 카드): 처치 시 광역 피해 반경 */
+const COIN_BLAST_RADIUS = 7;
+/** 골드 MAX 즉사 연쇄 최대 깊이 (스택 폭주 방지) */
+const GOLD_EXECUTE_MAX_CHAIN = 6;
 /** 멀티샷(활병 Lv5): 추가 타격 탐색 반경 = 사거리 + 이 보너스 */
 const MULTISHOT_BONUS = 4;
 /** 일격(암살자 Lv5): 보스는 즉사 면역 → 대신 공격력 × 이 배수의 큰 피해 (방어 무시) */
@@ -551,13 +599,14 @@ export class BattleEngine {
     const providers: CombatEntity[] = [];
     for (const e of this.entities) {
       if (e.auraShield > 0) e.auraShield = 0; // 이전 틱 값 초기화
-      if (e.side === 'ally' && e.state !== 'dead' && e.auraValue > 0) providers.push(e);
+      // 방패병 Lv5(아군 카드) + 치유사 내재 오라(아군·적 공통)
+      if (e.state !== 'dead' && e.auraValue > 0) providers.push(e);
     }
     if (providers.length === 0) return;
     for (const e of this.entities) {
-      if (e.side !== 'ally' || e.state === 'dead' || isStructure(e.kind)) continue;
+      if (e.state === 'dead' || isStructure(e.kind)) continue;
       for (const p of providers) {
-        if (p.auraValue <= e.auraShield) continue;
+        if (p.side !== e.side || p.auraValue <= e.auraShield) continue; // 같은 편만, 제공자 중 최대
         if (Math.hypot(e.x - p.x, e.y - p.y) <= SHIELD_AURA_RADIUS) e.auraShield = p.auraValue;
       }
     }
@@ -760,11 +809,31 @@ export class BattleEngine {
       burnPct: m?.burnPct ?? 0,
       stunOnHit: m?.stunSec ?? 0,
       undyingCdMax: m?.undyingCooldownSec ?? 0,
-      auraValue: (m?.auraDmgReductionPct ?? 0) / 100,
+      // 치유사: 내재 수호 오라(받는 피해 감소) — 아군·적 공통, 카드 보정과 합산
+      auraValue: (unitId === 'healer' ? HEALER_AURA_DR : 0) + (m?.auraDmgReductionPct ?? 0) / 100,
       multishot: m?.multishot ?? 0,
       healBonus: (m?.healBonusPct ?? 0) / 100,
       executeChance: (m?.executeChance ?? 0) / 100,
+      // 카드 MAX 트리거 효과 (아군 전용 — 카드는 아군에게만 적용)
+      reflect: (m?.reflectPct ?? 0) / 100,
+      thorns: (m?.thornsPct ?? 0) / 100,
+      thornsCd: 0,
+      counter: (m?.counterPct ?? 0) / 100,
+      coinBlast: (m?.coinBlastPct ?? 0) / 100,
+      goldExecute: (m?.goldExecuteChance ?? 0) / 100,
       noHeal: !!def.mechanical,
+      // 직업 역할 특성 오버라이드 (zeroProcFields 기본값 1/0 위에 덮어씀)
+      rangedDmgReduction:
+        unitId === 'shield' ? 0.4 :
+        unitId === 'swordsman' ? 0.3 : 0,
+      siegeDmgMult:
+        unitId === 'mageLow' || unitId === 'mageMid' || unitId === 'mageHigh' ? 0.4 :
+        unitId === 'assassin' ? 0.3 : 1,
+      vsUnitMult:
+        unitId === 'assassin' ? 1.6 :
+        unitId === 'mageLow' || unitId === 'mageMid' || unitId === 'mageHigh' ? 1.3 : 1,
+      vsRangedUnitMult: unitId === 'cavalry' ? 1.5 : 1,
+      evadeVsRanged: unitId === 'assassin' ? 0.3 : 0,
     };
   }
 
@@ -1059,6 +1128,7 @@ export class BattleEngine {
       }
       // 상태이상 틱: 출혈/화상 DoT + 불굴 쿨다운 (기절 중에도 진행)
       if (e.undyingCd > 0) e.undyingCd -= dt;
+      if (e.thornsCd > 0) e.thornsCd -= dt; // 가시 발동 쿨다운
       if (e.bleedLeft > 0) {
         e.bleedLeft -= dt;
         this.hurt(e, e.bleedRate * dt);
@@ -1282,14 +1352,17 @@ export class BattleEngine {
     e.state = inRange ? 'attacking' : 'moving';
     if (inRange && e.attackCd <= 0 && e.atkSpeed > 0) {
       e.attackCd = 1 / e.atkSpeed;
+      // 역할 배수 + 적 20명 이하 공성 보너스
+      const siegeAtk =
+        e.atk * e.siegeDmgMult * (this.enemyAlive <= SIEGE_CLEANUP_THRESHOLD ? SIEGE_CLEANUP_MULT : 1);
       if (e.projectileSpeed > 0) {
         // 타워 가장자리 조준 — 정지 목표라 항상 명중
         const dx = e.x - towerX;
         const dy = e.y - towerY;
         const d = Math.hypot(dx, dy) || 1;
-        this.launchProjectile(e, towerX + (dx / d) * towerRadius * 0.7, towerY + (dy / d) * towerRadius * 0.7, true);
+        this.launchProjectile(e, towerX + (dx / d) * towerRadius * 0.7, towerY + (dy / d) * towerRadius * 0.7, true, siegeAtk);
       } else {
-        this.damageTower(e.atk);
+        this.damageTower(siegeAtk);
       }
     }
   }
@@ -1419,8 +1492,8 @@ export class BattleEngine {
 
   // ── 투사체 ────────────────────────────────────────────
 
-  private launchProjectile(attacker: CombatEntity, tx: number, ty: number, targetTower: boolean) {
-    let atk = attacker.atk;
+  private launchProjectile(attacker: CombatEntity, tx: number, ty: number, targetTower: boolean, atkOverride?: number) {
+    let atk = atkOverride ?? attacker.atk;
     if (attacker.frenzyAtkPct > 0 && attacker.hp <= attacker.maxHp * 0.5) {
       atk *= 1 + attacker.frenzyAtkPct / 100;
     }
@@ -1617,7 +1690,17 @@ export class BattleEngine {
   }
 
   private applyDamage(attacker: CombatEntity, target: CombatEntity) {
-    if (target.evade > 0 && Math.random() < target.evade) return;
+    const rangedAtk = attacker.range >= RANGED_ATK_RANGE;
+    // 회피: 기본 + 원거리 공격에 추가 회피 (암살자)
+    const totalEvade = target.evade + (rangedAtk ? target.evadeVsRanged : 0);
+    if (totalEvade > 0 && Math.random() < totalEvade) {
+      // 카운터(회피율 카드 MAX): 회피 시 공격자에게 공격력 배수 피해
+      if (target.counter > 0 && attacker.state !== 'dead' && !isStructure(attacker.kind)) {
+        this.hurt(attacker, damage(target.atk * target.counter, attacker.def));
+        this.spawnEffect(attacker.x, attacker.y, 3, 'rgba(120,200,255,0.9)', 0.25);
+      }
+      return;
+    }
     // 일격(암살자 Lv5): 확률 발동 — 일반 즉사 / 보스는 면역 대신 큰 피해(공격력×배수, 방어 무시)
     if (
       attacker.executeChance > 0 &&
@@ -1637,7 +1720,16 @@ export class BattleEngine {
     if (attacker.frenzyAtkPct > 0 && attacker.hp <= attacker.maxHp * 0.5) {
       atk *= 1 + attacker.frenzyAtkPct / 100;
     }
+    // 역할 배수: 구조물 대상 vs 유닛 대상
+    if (isStructure(target.kind)) {
+      atk *= attacker.siegeDmgMult;
+    } else {
+      atk *= attacker.vsUnitMult;
+      if (target.range >= RANGED_ATK_RANGE) atk *= attacker.vsRangedUnitMult;
+    }
     let dmg = damage(atk, target.def);
+    // 원거리 공격 피해 반감 (방패병 40%, 검사 30%)
+    if (rangedAtk && target.rangedDmgReduction > 0) dmg *= 1 - target.rangedDmgReduction;
     if (attacker.critChance > 0 && Math.random() < attacker.critChance) dmg *= 1.5;
     // 추가타/불화살: 공격력 % 고정 추가피해 (방어 미적용)
     if (attacker.bonusChance > 0 && Math.random() < attacker.bonusChance) {
@@ -1652,7 +1744,21 @@ export class BattleEngine {
     if (attacker.lifestealPct > 0 && attacker.state !== 'dead' && !attacker.noHeal) {
       attacker.hp = Math.min(attacker.maxHp, attacker.hp + dealt * attacker.lifestealPct);
     }
-    if (isDead(target)) return;
+    // 피해 반사(방어력 카드 MAX): 받은 피해 일부를 공격자에게 (반사는 재반사·반격 미유발)
+    if (target.reflect > 0 && dealt > 0 && attacker.state !== 'dead' && !isStructure(attacker.kind)) {
+      this.hurt(attacker, dealt * target.reflect);
+    }
+    // 가시(체력 카드 MAX): 피격 시 주변 적 광역 (쿨타임 제한)
+    if (target.thorns > 0 && target.thornsCd <= 0 && !isDead(target)) {
+      this.thornsPulse(target);
+    }
+    if (isDead(target)) {
+      // 코인 폭발 / 골드 즉사 (아군이 적 처치 시)
+      if (attacker.side === 'ally' && target.side === 'enemy' && !isStructure(target.kind)) {
+        this.onAllyKill(attacker, target);
+      }
+      return;
+    }
     // 출혈: % 피해형 — 타워/구조물 미적용 (설계 04)
     if (
       attacker.bleedChance > 0 &&
@@ -1692,6 +1798,44 @@ export class BattleEngine {
     const cur = this.byId.get(t);
     if (!cur || cur.state === 'dead' || isStructure(cur.kind)) {
       victim.targetId = attackerId;
+    }
+  }
+
+  /** 가시(체력 카드 MAX): 피격자 주변 적에게 자신 최대체력 % 광역 피해 */
+  private thornsPulse(e: CombatEntity) {
+    e.thornsCd = THORNS_CD;
+    const dmg = e.maxHp * e.thorns;
+    for (const c of this.entities) {
+      if (c.side === e.side || c.state === 'dead' || isStructure(c.kind)) continue;
+      if (Math.hypot(c.x - e.x, c.y - e.y) <= THORNS_RADIUS) this.hurt(c, damage(dmg, c.def));
+    }
+    this.spawnEffect(e.x, e.y, THORNS_RADIUS, 'rgba(120,220,160,0.6)', 0.25);
+  }
+
+  /** 아군 처치 보너스 (골드 카드): 코인 폭발(광역) + MAX 랜덤 즉사. chain = 연쇄 깊이 가드 */
+  private onAllyKill(killer: CombatEntity, victim: CombatEntity, chain = 0) {
+    if (killer.coinBlast > 0) {
+      const blast = killer.atk * killer.coinBlast;
+      for (const c of this.entities) {
+        if (c.side !== 'enemy' || c.state === 'dead' || isStructure(c.kind) || c.id === victim.id) continue;
+        if (Math.hypot(c.x - victim.x, c.y - victim.y) <= COIN_BLAST_RADIUS) this.hurt(c, damage(blast, c.def));
+      }
+      this.spawnEffect(victim.x, victim.y, COIN_BLAST_RADIUS, 'rgba(255,215,0,0.85)', 0.3);
+    }
+    // 골드 MAX: 처치 시 확률로 랜덤 일반 적 즉사 (보스·미니보스·구조물 제외, 연쇄 가능)
+    if (chain < GOLD_EXECUTE_MAX_CHAIN && killer.goldExecute > 0 && Math.random() < killer.goldExecute) {
+      const pool: CombatEntity[] = [];
+      for (const c of this.entities) {
+        if (c.side !== 'enemy' || c.state === 'dead' || isStructure(c.kind) || BOSS_KINDS.has(c.kind)) continue;
+        pool.push(c);
+      }
+      if (pool.length > 0) {
+        const t = pool[Math.floor(Math.random() * pool.length)];
+        this.spawnEffect(t.x, t.y, 4, 'rgba(255,215,0,0.95)', 0.35);
+        // 연쇄: 즉사도 아군 처치 보너스 재발동 (코인 폭발 + 추가 즉사 연쇄, 깊이 제한)
+        this.onAllyKill(killer, t, chain + 1);
+        this.onDeath(t);
+      }
     }
   }
 
@@ -1756,6 +1900,12 @@ export class BattleEngine {
     // 영웅 프록 (글로벌 카드 — 불굴 등) + 패시브 피해감소
     h.dmgReduction = (m.dmgReductionPct + (p.dmgReductionPct ?? 0)) / 100;
     h.undyingCdMax = m.undyingCooldownSec;
+    // 카드 MAX 트리거 (방어 반사 / 체력 가시 / 회피 카운터 / 골드 코인·즉사) — 영웅도 글로벌 적용
+    h.reflect = m.reflectPct / 100;
+    h.thorns = m.thornsPct / 100;
+    h.counter = m.counterPct / 100;
+    h.coinBlast = m.coinBlastPct / 100;
+    h.goldExecute = m.goldExecuteChance / 100;
   }
 
   // ── 특수 유닛 ─────────────────────────────────────────

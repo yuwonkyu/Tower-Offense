@@ -162,19 +162,50 @@ const pct = (key: string, values: number[]) => values.map((v) => ({ [key]: v }))
 /** 글로벌 버프 카드 17장 (일반 10 + 고급 7) — 설계 05 */
 export const GLOBAL_CARDS: CardDef[] = [
   { id: 'g_atk', kind: 'global', rarity: 'common', name: '공격력 증가', description: '전체 아군 공격력 증가', levels: pct('atkPct', [6, 12, 18, 24, 30]) },
-  { id: 'g_def', kind: 'global', rarity: 'common', name: '방어력 증가', description: '전체 아군 방어력 증가', levels: pct('defPct', [6, 12, 18, 24, 30]) },
-  { id: 'g_hp', kind: 'global', rarity: 'common', name: '체력 증가', description: '전체 아군 체력 증가', levels: pct('hpPct', [6, 12, 18, 24, 30]) },
+  {
+    id: 'g_def', kind: 'global', rarity: 'common', name: '방어력 증가',
+    description: '전체 아군 방어력 증가 (MAX: 받은 피해 일부를 공격자에게 반사)',
+    levels: [
+      { defPct: 6 }, { defPct: 12 }, { defPct: 18 }, { defPct: 24 },
+      { defPct: 30, reflectPct: 30 }, // MAX: 피해 반사 30%
+    ],
+  },
+  {
+    id: 'g_hp', kind: 'global', rarity: 'common', name: '체력 증가',
+    description: '전체 아군 체력 증가 (MAX: 피격 시 주변 적에게 가시 광역 피해)',
+    levels: [
+      { hpPct: 6 }, { hpPct: 12 }, { hpPct: 18 }, { hpPct: 24 },
+      { hpPct: 30, thornsPct: 4 }, // MAX: 피격 시 최대체력 4% 광역(가시)
+    ],
+  },
   { id: 'g_movespeed', kind: 'global', rarity: 'common', name: '이동속도 증가', description: '전체 아군 이동속도 증가', levels: pct('moveSpeedPct', [4, 8, 12, 16, 20]) },
   { id: 'g_range', kind: 'global', rarity: 'common', name: '사거리 증가', description: '전체 아군 사거리 증가', levels: pct('rangePct', [4, 8, 12, 16, 20]) },
   { id: 'g_atkspeed', kind: 'global', rarity: 'common', name: '공격속도 증가', description: '전체 아군 공격속도 증가', levels: pct('atkSpeedPct', [5, 10, 15, 20, 25]) },
   { id: 'g_exp', kind: 'global', rarity: 'common', name: '경험치 획득 증가', description: '경험치 획득량 증가', levels: pct('expPct', [8, 16, 24, 32, 40]) },
   { id: 'g_spawnspeed', kind: 'global', rarity: 'common', name: '유닛 생성속도 증가', description: '아군 유닛 생성속도 증가', levels: pct('spawnSpeedPct', [5, 10, 15, 20, 25]) },
   { id: 'g_cdr', kind: 'global', rarity: 'common', name: '스킬 쿨타임 감소', description: '영웅 스킬 쿨타임 감소', levels: pct('cdrPct', [5, 10, 15, 20, 25]) },
-  { id: 'g_gold', kind: 'global', rarity: 'common', name: '골드 획득 증가', description: '골드 획득량 증가', levels: pct('goldPct', [10, 18, 26, 34, 42]) },
+  {
+    id: 'g_gold', kind: 'global', rarity: 'common', name: '골드 획득 증가',
+    description: '골드 획득 + 처치 시 코인 폭발(광역) · MAX: 처치 시 확률로 랜덤 적 즉사',
+    levels: [
+      { goldPct: 10, coinBlastPct: 20 },
+      { goldPct: 18, coinBlastPct: 30 },
+      { goldPct: 26, coinBlastPct: 45 },
+      { goldPct: 34, coinBlastPct: 60 },
+      { goldPct: 42, coinBlastPct: 80, goldExecuteChance: 12 }, // MAX: 처치 시 12% 랜덤 적 즉사(연쇄)
+    ],
+  },
   // 고급 7장
   { id: 'g_crit', kind: 'global', rarity: 'rare', name: '치명타 확률', description: '전체 아군 치명타 확률 (배수 1.5배)', levels: pct('critChance', [5, 10, 15, 20, 25]) },
   { id: 'g_lifesteal', kind: 'global', rarity: 'rare', name: '흡혈', description: '전체 아군, 가한 데미지의 % 회복', levels: pct('lifestealPct', [2, 4, 6, 8, 10]) },
-  { id: 'g_evade', kind: 'global', rarity: 'rare', name: '회피율', description: '전체 아군 회피율 증가', levels: pct('evadePct', [5, 9, 13, 17, 21]) },
+  {
+    id: 'g_evade', kind: 'global', rarity: 'rare', name: '회피율',
+    description: '전체 아군 회피율 증가 (MAX: 회피 시 공격자에게 카운터)',
+    levels: [
+      { evadePct: 5 }, { evadePct: 9 }, { evadePct: 13 }, { evadePct: 17 },
+      { evadePct: 21, counterPct: 150 }, // MAX: 회피 시 공격력 150% 카운터
+    ],
+  },
   { id: 'g_hero', kind: 'global', rarity: 'rare', name: '영웅 강화', description: '영웅 스탯 전반 증가 (영웅 전용)', levels: pct('heroStatPct', [10, 18, 26, 34, 42]) },
   { id: 'g_frenzy', kind: 'global', rarity: 'rare', name: '광폭화', description: 'HP 50% 이하 시 공격력 증가', levels: pct('frenzyAtkPct', [15, 25, 35, 45, 55]) },
   { id: 'g_undying', kind: 'global', rarity: 'rare', name: '불굴', description: '치명적 피해 시 HP 1로 생존 (쿨타임 초)', levels: [{ cooldownSec: 30 }, { cooldownSec: 25 }, { cooldownSec: 20 }, { cooldownSec: 15 }, { cooldownSec: 10 }] },

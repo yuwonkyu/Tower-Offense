@@ -66,6 +66,16 @@ export interface UnitMods {
   healBonusPct: number;
   /** 일격 — 타격 시 즉사 확률 % (암살자 Lv5, 구조물·보스 제외) */
   executeChance: number;
+  /** 피해 반사 % — 받은 피해의 일부를 공격자에게 (방어력 카드 MAX) */
+  reflectPct: number;
+  /** 가시 — 피격 시 주변 적에게 자신 최대체력 % 광역 피해 (체력 카드 MAX) */
+  thornsPct: number;
+  /** 카운터 — 회피 시 공격자에게 공격력 % 피해 (회피율 카드 MAX) */
+  counterPct: number;
+  /** 코인 폭발 — 처치 시 주변 적에게 공격력 % 광역 (골드 카드) */
+  coinBlastPct: number;
+  /** 처치 시 랜덤 일반 적 즉사 확률 % (골드 카드 MAX, 보스·구조물 제외) */
+  goldExecuteChance: number;
 }
 
 const MOD_KEYS: (keyof UnitMods)[] = [
@@ -90,6 +100,11 @@ const MOD_KEYS: (keyof UnitMods)[] = [
   'multishot',
   'healBonusPct',
   'executeChance',
+  'reflectPct',
+  'thornsPct',
+  'counterPct',
+  'coinBlastPct',
+  'goldExecuteChance',
 ];
 
 export function zeroMods(): UnitMods {
@@ -122,6 +137,11 @@ export function zeroMods(): UnitMods {
     multishot: 0,
     healBonusPct: 0,
     executeChance: 0,
+    reflectPct: 0,
+    thornsPct: 0,
+    counterPct: 0,
+    coinBlastPct: 0,
+    goldExecuteChance: 0,
   };
 }
 
