@@ -54,7 +54,8 @@ const UNIT_VISUALS: Record<EntityKind, { color: string; radius: number }> = {
   paladinBoss: { color: '#ffd700', radius: 4.2 },
 };
 
-const PROJECTILE_COLOR = 'rgba(220,210,180,0.95)';
+const PROJECTILE_COLOR = 'rgba(255,236,180,1)'; // 본체 (밝게)
+const PROJECTILE_GLOW = 'rgba(255,160,70,0.4)'; // 외곽 글로우 (불타는 공성탄 느낌, 가시성↑)
 
 const ALLY_STROKE = 'rgba(120,200,255,0.9)';
 
@@ -211,9 +212,10 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, stroke(ALLY_STROKE, 1.2));
     }
 
-    // 투사체 (투석기 돌덩이)
+    // 투사체 (투석기 돌덩이) — 가시성↑: 외곽 글로우 + 밝은 본체
     for (const p of engine.projectiles) {
-      canvas.drawCircle(p.x * scale, p.y * scale, 1.1 * scale, fill(PROJECTILE_COLOR));
+      canvas.drawCircle(p.x * scale, p.y * scale, 3.6 * scale, fill(PROJECTILE_GLOW));
+      canvas.drawCircle(p.x * scale, p.y * scale, 1.9 * scale, fill(PROJECTILE_COLOR));
     }
 
     // 트레이서 (활/마법 즉시타격 시각 — 발사점→타깃 보간 이동)
