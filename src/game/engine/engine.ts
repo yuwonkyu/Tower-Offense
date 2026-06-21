@@ -20,7 +20,7 @@ import {
   expToNextLevel,
   HERO_BASE_REGEN_PCT,
 } from '@/game/formulas';
-import { spawnFreq, spawnWeightsForStage, type SpawnWeight } from '@/data/spawnWeights';
+import { spawnFreq, spawnWeightsForStage, supplyCost, type SpawnWeight } from '@/data/spawnWeights';
 import { CardSystem, type UnitMods } from './cards';
 
 /** 전체 유닛 정의 룩업 */
@@ -309,8 +309,8 @@ interface PendingStrike {
 }
 
 /** 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화). 폰 성능 균형점 200 (피드백) */
-const ENEMY_MAX_ALIVE = 200;
-const ALLY_MAX_ALIVE = 200;
+// 소모 인구수 캡 — 양측 동일. 살아있는 유닛의 supplyCost 합이 이 값 이하 (1코스트 기준 200기)
+const SUPPLY_CAP = 200;
 /** 유닛 카드 보유 시 기본 초당 생성률 — 물량 스트림으로 전선 상시 유지 (모여서 출발 대신 연속 젠) */
 const ALLY_SPAWN_BASE = 2.0;
 /** 유닛 카드 1장당 추가 생성률 (설계 07: 카드마다 독립 생성) */
@@ -363,10 +363,10 @@ const LATE_GAME_EXP_TIME = 300;
 /** 원거리 공격자 판정 기준 (피해 반감·회피 적용) — 타깃 우선순위 RANGED_THRESHOLD와 별개 */
 const RANGED_ATK_RANGE = 5;
 /** 생존 적 이 수 이하일 때 공성(타워) 피해 배수 (섬멸 마무리 보상) */
-const SIEGE_CLEANUP_THRESHOLD = 20;
+const SIEGE_CLEANUP_THRESHOLD = 30;
 const SIEGE_CLEANUP_MULT = 1.5;
-/** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 7) */
-const VALOR_RADIUS = 34;
+/** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 — 범위 확대 34→44) */
+const VALOR_RADIUS = 44;
 /** 수호 오라(방패병 Lv5): 이 반경 내 아군 피해감소 (카드 개편) */
 const SHIELD_AURA_RADIUS = 12;
 /** 치유사 내재 수호 오라 — 주변 아군 받는 피해 감소 0~1 (아군·적 공통) */
@@ -1011,13 +1011,14 @@ export class BattleEngine {
     this.spawnAcc += this.config.spawnRate * warmup * dt;
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
-      if (this.countSide('enemy') >= ENEMY_MAX_ALIVE) continue;
+      const eUnit = this.pickEnemyUnit();
+      if (this.sideSupply('enemy') + supplyCost(eUnit) > SUPPLY_CAP) continue;
       const { towerX, towerY, towerRadius, width } = this.field;
       const angle = Math.random() * Math.PI * 2;
       const r = towerRadius + 2;
       const x = Math.min(width - 3, Math.max(3, towerX + Math.cos(angle) * r));
       const y = towerY + Math.sin(angle) * r;
-      this.addEntity(this.makeUnit('enemy', this.pickEnemyUnit(), x, y));
+      this.addEntity(this.makeUnit('enemy', eUnit, x, y));
     }
   }
 
@@ -1029,9 +1030,10 @@ export class BattleEngine {
     this.allySpawnAcc += rate * spawnBoost * dt;
     while (this.allySpawnAcc >= 1) {
       this.allySpawnAcc -= 1;
-      if (this.countSide('ally') - 1 >= ALLY_MAX_ALIVE) continue;
       // 빈도 배수로 가중 선택 — 원거리/공성/기마 ↓, 근접 ↑ (피드백)
       const unitId = this.weightedUnitPick(unitCards);
+      // 소모 인구수 캡 (유닛별 supplyCost 합) — 무거운 유닛일수록 적게 운용
+      if (this.sideSupply('ally') + supplyCost(unitId) > SUPPLY_CAP) continue;
       // 성 포위: 타워 기준 360° 골든 앵글로 화면 가장자리에서 생성 → 사방에서 공성 (피드백 5)
       this.allySpawnAngle = (this.allySpawnAngle + 2.39996323) % (Math.PI * 2);
       const { x, y } = this.edgePointFromTower(this.allySpawnAngle);
@@ -1066,6 +1068,17 @@ export class BattleEngine {
       if (e.side === side && e.state !== 'dead' && !isStructure(e.kind)) n++;
     }
     return n;
+  }
+
+  /** 한 측의 현재 소모 인구수 합 (유닛만 — 영웅·구조물 제외). 캡 판정용 */
+  private sideSupply(side: Side): number {
+    let sum = 0;
+    for (const e of this.entities) {
+      if (e.side !== side || e.state === 'dead') continue;
+      if (e.kind === 'hero' || isStructure(e.kind)) continue;
+      sum += supplyCost(e.kind as UnitId);
+    }
+    return sum;
   }
 
   /** 적 배회: 타워 주변 [MIN,MAX] 반경의 임의 지점을 순찰, 도달하면 새 지점 (피드백 4) */

@@ -36,6 +36,29 @@ export function spawnFreq(unitId: UnitId): number {
   return SPAWN_FREQ[unitId] ?? 1;
 }
 
+/**
+ * 유닛 소모 인구수(supply). 캡(SUPPLY_CAP)에 합산 — 무거운 유닛일수록 적게 운용된다.
+ * 1: 검사·방패·창병·활병 / 3: 기마·폭탄·암살·치유사·마법사(전 등급) / 5: 투석기·기타
+ */
+export const SUPPLY_COST: Partial<Record<UnitId, number>> = {
+  shield: 1,
+  swordsman: 1,
+  spear: 1,
+  archer: 1,
+  cavalry: 3,
+  bomber: 3,
+  assassin: 3,
+  healer: 3,
+  mageLow: 3,
+  mageMid: 3,
+  mageHigh: 3,
+  catapult: 5,
+};
+
+export function supplyCost(unitId: UnitId): number {
+  return SUPPLY_COST[unitId] ?? 5; // 기타 = 5
+}
+
 export interface SpawnWeight {
   unitId: UnitId;
   weight: number;
