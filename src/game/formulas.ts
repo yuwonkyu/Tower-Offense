@@ -58,15 +58,16 @@ function lerpTable(table: [number, number][], stage: number): number {
 
 /** 적 유닛 스탯 배수 (설계 10): 1→×1.0 ... 30→×2.3 */
 export function enemyStatMultiplier(stage: number): number {
+  // 승률 ~66%(3판 2승) 목표로 후반 적 스케일 하향 — 비대칭(적 약화)이 전선 돌파에 직접 작용
   return lerpTable(
     [
       [1, 1.0],
-      [5, 1.2],
-      [10, 1.4],
-      [15, 1.6],
-      [20, 1.8],
-      [25, 2.0],
-      [30, 2.3],
+      [5, 1.15],
+      [10, 1.3],
+      [15, 1.4],
+      [20, 1.5],
+      [25, 1.75],
+      [30, 1.95],
     ],
     stage,
   );
