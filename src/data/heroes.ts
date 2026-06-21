@@ -13,9 +13,9 @@ export const HEROES: HeroDef[] = [
     id: 'maruhan',
     name: '마루한',
     concept: '돌격대장 (탱커/근접 광역)',
-    // 폰 피드백: 즉사 방지 체력/방어 2배 (160→320 / 35→70) + 영웅 체젠(엔진 1%/s). x3은 밸런스 붕괴로 x2 하향
-    stats: { atk: 30, def: 70, hp: 320, moveSpeed: 6, range: 2, atkSpeed: 1.2, aoe: 2 },
-    growth: { atk: 1, def: 2, hp: 8, atkSpeed: 0.02 },
+    // 유닛 평균 ~3배 스케일 (HP avg~428→1500, ATK avg~38→95). 탱커=고방어
+    stats: { atk: 95, def: 60, hp: 1500, moveSpeed: 6, range: 2, atkSpeed: 1.2, aoe: 2 },
+    growth: { atk: 3, def: 4, hp: 45, atkSpeed: 0.02 },
     skill: {
       name: '용맹',
       description: '1분간 주변 아군 전체 + 자신의 모든 스탯 % 증가 (광역 버프형)',
@@ -34,9 +34,9 @@ export const HEROES: HeroDef[] = [
     id: 'mir',
     name: '미르',
     concept: '궁사 (원거리)',
-    // 원거리 사거리 ×0.6 재조정 (25→15) · 체력/방어 2배 (120→240 / 15→30)
-    stats: { atk: 35, def: 30, hp: 240, moveSpeed: 6.5, range: 15, atkSpeed: 1.4, aoe: 1 },
-    growth: { atk: 2, def: 1, hp: 5, atkSpeed: 0.03 },
+    // 유닛 평균 ~3배 스케일 · 원거리 사거리 12 (활병 9 < 미르 12 < 투석기 18)
+    stats: { atk: 125, def: 20, hp: 1150, moveSpeed: 6.5, range: 12, atkSpeed: 1.4, aoe: 1 },
+    growth: { atk: 5, def: 1, hp: 30, atkSpeed: 0.03 },
     skill: {
       name: '살소나기',
       description: '광역 범위에 화살비 (150% 피해)',
@@ -54,9 +54,9 @@ export const HEROES: HeroDef[] = [
     id: 'noeul',
     name: '노을',
     concept: '암살자',
-    // 체력/방어 2배 (130→260 / 15→30)
-    stats: { atk: 35, def: 30, hp: 260, moveSpeed: 7, range: 1, atkSpeed: 2, aoe: 1 },
-    growth: { atk: 2, def: 1, hp: 6, atkSpeed: 0.04 },
+    // 유닛 평균 ~3배 스케일 · 고공속 암살자
+    stats: { atk: 140, def: 20, hp: 1200, moveSpeed: 7, range: 1.5, atkSpeed: 2, aoe: 1 },
+    growth: { atk: 6, def: 1, hp: 32, atkSpeed: 0.04 },
     skill: {
       name: '피노을',
       description: '지정 위치로 이동 + 광역 피해(130%) + 공격력 디버프',

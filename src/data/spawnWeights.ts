@@ -21,16 +21,15 @@ const NEW_UNIT_WEIGHT = 12;
  * 아군·적군 양측 공통 적용 (피드백: 투석기/원거리/기마병 생성속도 하향).
  */
 export const SPAWN_FREQ: Partial<Record<UnitId, number>> = {
-  // "조금" 하향 — 공성 화력(투석기) 급감 방지하면서 근접 비중↑ (시뮬: 과하면 타워 미타격)
-  catapult: 0.7,
-  archer: 0.8,
-  mageLow: 0.8,
-  mageMid: 0.8,
-  mageHigh: 0.8,
-  assassin: 0.8,
-  cavalry: 0.7,
-  bomber: 0.85,
-  healer: 0.85,
+  // 젠속도(유저 스탯표): 빠름 1.4 / 보통 1.0(생략) / 느림 0.6
+  shield: 1.4, // 빠름
+  swordsman: 1.4, // 빠름
+  spear: 1.4, // 빠름
+  bomber: 1.4, // 빠름
+  assassin: 1.4, // 빠름
+  cavalry: 0.6, // 느림
+  catapult: 0.6, // 느림
+  // archer / healer / mageLow·Mid·High = 보통 (기본 1.0)
 };
 
 export function spawnFreq(unitId: UnitId): number {

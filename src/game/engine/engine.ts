@@ -55,7 +55,8 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
     width,
     height,
     towerX: width / 2,
-    towerY: height * 0.34,
+    // 타워를 살짝 아래로 (0.34→0.40) — 영웅(6시 생성)·하단 유닛 진입 거리 단축, 사방 결집 균형 (피드백)
+    towerY: height * 0.4,
     towerRadius: 11,
     heroX: width / 2,
     heroY: height * 0.74,
@@ -805,7 +806,7 @@ export class BattleEngine {
 
   private spawnStructures() {
     const { walls, barricades, traps } = structureCounts(this.config.stage);
-    const { towerX, towerY, towerRadius, width, heroY } = this.field;
+    const { towerX, towerY, towerRadius, width } = this.field;
 
     // 성벽: 타워 주변 균등 배치 — 남쪽(아군 진입 방향)부터
     for (let i = 0; i < walls; i++) {
@@ -816,12 +817,14 @@ export class BattleEngine {
       );
     }
 
-    // 바리케이트: 중간 지대 랜덤 — 매판 동선 변화 (설계 11)
-    const bandTop = towerY + towerRadius + 12;
-    const bandHeight = Math.max(10, heroY - 18 - bandTop);
+    // 바리케이트: 타워 주변 360° 환형 스캐터 — 하단 몰림 해소, 사방 동선 변화 (피드백)
+    const baMinR = towerRadius + 14;
+    const baMaxR = Math.min(width, this.field.height) * 0.42;
     for (let i = 0; i < barricades; i++) {
-      const x = 8 + Math.random() * (width - 16);
-      const y = bandTop + Math.random() * bandHeight;
+      const angle = Math.random() * Math.PI * 2;
+      const r = baMinR + Math.random() * Math.max(8, baMaxR - baMinR);
+      const x = Math.max(8, Math.min(width - 8, towerX + Math.cos(angle) * r));
+      const y = Math.max(8, Math.min(this.field.height - 8, towerY + Math.sin(angle) * r));
       this.addEntity(this.makeStructure('barricade', x, y));
     }
 
