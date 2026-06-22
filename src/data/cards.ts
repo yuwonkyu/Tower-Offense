@@ -161,7 +161,14 @@ const pct = (key: string, values: number[]) => values.map((v) => ({ [key]: v }))
 
 /** 글로벌 버프 카드 17장 (일반 10 + 고급 7) — 설계 05 */
 export const GLOBAL_CARDS: CardDef[] = [
-  { id: 'g_atk', kind: 'global', rarity: 'common', name: '공격력 증가', description: '전체 아군 공격력 증가', levels: pct('atkPct', [6, 12, 18, 24, 30]) },
+  {
+    id: 'g_atk', kind: 'global', rarity: 'common', name: '공격력 증가',
+    description: '전체 아군 공격력 증가 (MAX: 모든 공격이 광역)',
+    levels: [
+      { atkPct: 6 }, { atkPct: 12 }, { atkPct: 18 }, { atkPct: 24 },
+      { atkPct: 30, bonusAoe: 2.5 }, // MAX: 광역공격 — 공격에 스플래시 반경 +2.5
+    ],
+  },
   {
     id: 'g_def', kind: 'global', rarity: 'common', name: '방어력 증가',
     description: '전체 아군 방어력 증가 (MAX: 받은 피해 일부를 공격자에게 반사)',
@@ -180,7 +187,14 @@ export const GLOBAL_CARDS: CardDef[] = [
   },
   { id: 'g_movespeed', kind: 'global', rarity: 'common', name: '이동속도 증가', description: '전체 아군 이동속도 증가', levels: pct('moveSpeedPct', [4, 8, 12, 16, 20]) },
   { id: 'g_range', kind: 'global', rarity: 'common', name: '사거리 증가', description: '전체 아군 사거리 증가', levels: pct('rangePct', [4, 8, 12, 16, 20]) },
-  { id: 'g_atkspeed', kind: 'global', rarity: 'common', name: '공격속도 증가', description: '전체 아군 공격속도 증가', levels: pct('atkSpeedPct', [5, 10, 15, 20, 25]) },
+  {
+    id: 'g_atkspeed', kind: 'global', rarity: 'common', name: '공격속도 증가',
+    description: '전체 아군 공격속도 증가 (MAX: 50% 확률 이중공격)',
+    levels: [
+      { atkSpeedPct: 5 }, { atkSpeedPct: 10 }, { atkSpeedPct: 15 }, { atkSpeedPct: 20 },
+      { atkSpeedPct: 25, doubleStrikeChance: 50 }, // MAX: 50% 이중공격
+    ],
+  },
   { id: 'g_exp', kind: 'global', rarity: 'common', name: '경험치 획득 증가', description: '경험치 획득량 증가', levels: pct('expPct', [8, 16, 24, 32, 40]) },
   { id: 'g_spawnspeed', kind: 'global', rarity: 'common', name: '유닛 생성속도 증가', description: '아군 유닛 생성속도 증가', levels: pct('spawnSpeedPct', [5, 10, 15, 20, 25]) },
   { id: 'g_cdr', kind: 'global', rarity: 'common', name: '스킬 쿨타임 감소', description: '영웅 스킬 쿨타임 감소', levels: pct('cdrPct', [5, 10, 15, 20, 25]) },

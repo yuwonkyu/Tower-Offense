@@ -76,6 +76,10 @@ export interface UnitMods {
   coinBlastPct: number;
   /** 처치 시 랜덤 일반 적 즉사 확률 % (골드 카드 MAX, 보스·구조물 제외) */
   goldExecuteChance: number;
+  /** 광역공격 — 공격 시 추가 스플래시 반경(flat, 공격력 카드 Lv5 MAX) */
+  bonusAoe: number;
+  /** 이중공격 확률 % (공속 카드 Lv5 MAX) */
+  doubleStrikeChance: number;
 }
 
 const MOD_KEYS: (keyof UnitMods)[] = [
@@ -105,6 +109,8 @@ const MOD_KEYS: (keyof UnitMods)[] = [
   'counterPct',
   'coinBlastPct',
   'goldExecuteChance',
+  'bonusAoe',
+  'doubleStrikeChance',
 ];
 
 export function zeroMods(): UnitMods {
@@ -142,6 +148,8 @@ export function zeroMods(): UnitMods {
     counterPct: 0,
     coinBlastPct: 0,
     goldExecuteChance: 0,
+    bonusAoe: 0,
+    doubleStrikeChance: 0,
   };
 }
 

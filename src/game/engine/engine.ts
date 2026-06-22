@@ -128,6 +128,8 @@ export interface CombatEntity {
   retargetCd: number;
   targetId: number;
   state: EntityState;
+  /** 생성 후 경과 시간(초) — 오래된 유닛은 분산 제외 (성 침범·밀림 방지) */
+  age: number;
 
   // ── 프록 효과 (설계 04, 05 — 카드 부여) ──
   /** 받는 피해 감소 0~1 */
@@ -168,6 +170,8 @@ export interface CombatEntity {
   auraShield: number;
   /** 멀티샷 추가 타격 대상 수 (활병 Lv5 = 1) */
   multishot: number;
+  /** 이중공격 확률 0~1 (공속 카드 Lv5 MAX) */
+  doubleStrikeChance: number;
   /** 치유량 증가 배율 0~ (치유사 — 0 = 기본) */
   healBonus: number;
   /** 일격 즉사 확률 0~1 (암살자 Lv5) */
@@ -227,6 +231,8 @@ function zeroProcFields() {
     auraValue: 0,
     auraShield: 0,
     multishot: 0,
+    doubleStrikeChance: 0,
+    age: 0,
     healBonus: 0,
     executeChance: 0,
     reflect: 0,
@@ -360,6 +366,8 @@ const PIERCE_RADIUS = 3.5;
 const CHARGE_MOVE_MULT = 1.3;
 /** 유닛 분산: 아군끼리 이 거리 이하면 서로 밀어냄 (뭉침 방지 — 피드백 1·9) */
 const SEPARATION_RADIUS = 5;
+/** 분산 grace: 생성 후 이 시간(초) 지난 유닛은 분산 제외 — 성 침범·밀림 방지 (피드백, 필요 시 60으로) */
+const SEPARATION_GRACE = 30;
 /** 분산 강도 (한 틱당 최대 밀어내기 거리 계수) */
 const SEPARATION_FORCE = 0.5;
 /** 투석기 발사 준비 시간 (초) — 배치 직후 즉시 사격 방지 (피드백 8) */
@@ -786,7 +794,7 @@ export class BattleEngine {
       range: def.stats.range * f(m?.rangePct),
       atkSpeed: def.stats.atkSpeed * f(m?.atkSpeedPct),
       moveSpeed: def.stats.moveSpeed * f(m?.moveSpeedPct),
-      aoe: def.stats.aoe * f(m?.aoePct),
+      aoe: def.stats.aoe * f(m?.aoePct) + (m?.bonusAoe ?? 0), // bonusAoe: 공격력 카드 Lv5 광역공격
       priority: def.priority,
       evade: (unitId === 'assassin' ? 0.3 : 0) + (m?.evadePct ?? 0) / 100,
       killExp: def.exp,
@@ -819,6 +827,7 @@ export class BattleEngine {
       // 치유사: 내재 수호 오라(받는 피해 감소) — 아군·적 공통, 카드 보정과 합산
       auraValue: (unitId === 'healer' ? HEALER_AURA_DR : 0) + (m?.auraDmgReductionPct ?? 0) / 100,
       multishot: m?.multishot ?? 0,
+      doubleStrikeChance: (m?.doubleStrikeChance ?? 0) / 100,
       healBonus: (m?.healBonusPct ?? 0) / 100,
       executeChance: (m?.executeChance ?? 0) / 100,
       // 카드 MAX 트리거 효과 (아군 전용 — 카드는 아군에게만 적용)
@@ -1138,6 +1147,7 @@ export class BattleEngine {
     this.allyWaveReady = this.countSide('ally') - (this.hero.state !== 'dead' ? 1 : 0) >= ALLY_RALLY_SIZE;
     for (const e of this.entities) {
       if (e.state === 'dead') continue;
+      e.age += dt; // 생성 후 경과 — 분산 grace 판정용
       if (e.hitFlash > 0) e.hitFlash -= dt; // 피격 플래시 감쇠 (구조물 포함)
       if (isStructure(e.kind)) continue; // 구조물은 행동 없음 (트랩은 updateTraps)
 
@@ -1267,14 +1277,13 @@ export class BattleEngine {
   private acquireAllyTarget(e: CombatEntity) {
     const reach = Math.max(e.range, 1) + BODY_RADIUS;
 
-    // 투석기 = 공성 전문: 타워가 사거리 내면 우선 포격 (성에 가까우니까), 코앞 적은 무시 (피드백)
-    if (e.kind === 'catapult') {
-      const tDist =
-        Math.hypot(this.field.towerX - e.x, this.field.towerY - e.y) - this.field.towerRadius;
-      if (tDist <= e.range) {
-        e.targetId = TOWER_TARGET;
-        return;
-      }
+    // 공성 우선: 타워가 사거리(+근접) 내면 누구든 우선 포격 — 포위하고도 타워 못 치는 문제 해결 (피드백).
+    // 적 유닛 우선 → 타워 우선으로 전환: 사거리 안에 성이 들어오면 성을 친다(적 반격은 retaliate로 응전).
+    const tDist =
+      Math.hypot(this.field.towerX - e.x, this.field.towerY - e.y) - this.field.towerRadius;
+    if (tDist <= reach) {
+      e.targetId = TOWER_TARGET;
+      return;
     }
 
     // 1) 사거리 내 적 유닛
@@ -1373,6 +1382,8 @@ export class BattleEngine {
       if (wasMoving && e.chargeDmgPct > 0) e.chargeReady = true;
       e.attackCd = 1 / e.atkSpeed;
       this.performAttack(e, target);
+      // 이중공격 (공속 카드 Lv5 MAX): 확률로 즉시 한 번 더
+      if (e.doubleStrikeChance > 0 && Math.random() < e.doubleStrikeChance) this.performAttack(e, target);
     }
   }
 
@@ -1383,26 +1394,33 @@ export class BattleEngine {
     e.state = inRange ? 'attacking' : 'moving';
     if (inRange && e.attackCd <= 0 && e.atkSpeed > 0) {
       e.attackCd = 1 / e.atkSpeed;
-      // 역할 배수 + 적 20명 이하 공성 보너스
-      const siegeAtk =
-        e.atk * e.siegeDmgMult * (this.enemyAlive <= SIEGE_CLEANUP_THRESHOLD ? SIEGE_CLEANUP_MULT : 1);
-      if (e.projectileSpeed > 0) {
-        // 타워 가장자리 조준 — 정지 목표라 항상 명중
-        const dx = e.x - towerX;
-        const dy = e.y - towerY;
-        const d = Math.hypot(dx, dy) || 1;
-        this.launchProjectile(
-          e,
-          towerX + (dx / d) * towerRadius * 0.7,
-          towerY + (dy / d) * towerRadius * 0.7,
-          true,
-          siegeAtk,
-          undefined,
-          e.kind === 'hero', // 영웅이면 타워 포격도 시안 화살 비주얼
-        );
-      } else {
-        this.damageTower(siegeAtk);
-      }
+      this.siegeTower(e);
+      // 이중공격 (공속 카드 Lv5 MAX)
+      if (e.doubleStrikeChance > 0 && Math.random() < e.doubleStrikeChance) this.siegeTower(e);
+    }
+  }
+
+  /** 타워 1회 공성 — 역할 배수 + 섬멸(적 30↓) 보너스. 투사체/히트스캔 분기 */
+  private siegeTower(e: CombatEntity) {
+    const { towerX, towerY, towerRadius } = this.field;
+    const siegeAtk =
+      e.atk * e.siegeDmgMult * (this.enemyAlive <= SIEGE_CLEANUP_THRESHOLD ? SIEGE_CLEANUP_MULT : 1);
+    if (e.projectileSpeed > 0) {
+      // 타워 가장자리 조준 — 정지 목표라 항상 명중
+      const dx = e.x - towerX;
+      const dy = e.y - towerY;
+      const d = Math.hypot(dx, dy) || 1;
+      this.launchProjectile(
+        e,
+        towerX + (dx / d) * towerRadius * 0.7,
+        towerY + (dy / d) * towerRadius * 0.7,
+        true,
+        siegeAtk,
+        undefined,
+        e.kind === 'hero', // 영웅이면 타워 포격도 시안 화살 비주얼
+      );
+    } else {
+      this.damageTower(siegeAtk);
     }
   }
 
@@ -2064,10 +2082,10 @@ export class BattleEngine {
     const { width, height } = this.field;
     for (let i = 0; i < len; i++) {
       const a = entities[i];
-      if (a.state === 'dead' || a.side !== 'ally' || a.kind === 'hero' || a.kind === 'bomber' || isStructure(a.kind)) continue;
+      if (a.state === 'dead' || a.side !== 'ally' || a.kind === 'hero' || a.kind === 'bomber' || isStructure(a.kind) || a.age > SEPARATION_GRACE) continue;
       for (let j = i + 1; j < len; j++) {
         const b = entities[j];
-        if (b.state === 'dead' || b.side !== 'ally' || b.kind === 'hero' || b.kind === 'bomber' || isStructure(b.kind)) continue;
+        if (b.state === 'dead' || b.side !== 'ally' || b.kind === 'hero' || b.kind === 'bomber' || isStructure(b.kind) || b.age > SEPARATION_GRACE) continue;
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const dist = Math.hypot(dx, dy);
