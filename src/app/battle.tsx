@@ -38,7 +38,7 @@ export default function BattleScreen() {
   const pickedCards = useBattleStore((s) => s.pickedCards);
   const pickChoices = useBattleStore((s) => s.pickChoices);
   const pickTimeLeft = useBattleStore((s) => s.pickTimeLeft);
-  const rerollUsed = useBattleStore((s) => s.rerollUsed);
+  const rerollAdUnlocked = useBattleStore((s) => s.rerollAdUnlocked);
   const rewardDoubled = useBattleStore((s) => s.rewardDoubled);
   const resourceGain = useBattleStore((s) => s.resourceGain);
   // 액션 (안정적 참조)
@@ -104,6 +104,7 @@ export default function BattleScreen() {
       store.unlockX4();
     } else if (adKind === 'cardReroll') {
       store.rerollCards();
+      useBattleStore.setState({ rerollAdUnlocked: true }); // 광고 1회 → 그 판 리롤 무한 무료
     } else if (adKind === 'doubleReward') {
       const delta = store.applyDoubleReward();
       if (delta > 0) useProgressStore.getState().addGold(delta);
@@ -222,11 +223,10 @@ export default function BattleScreen() {
           level={useBattleStore.getState().heroLevel}
           onPick={pickCard}
           onReroll={() => {
-            if (adFree) useBattleStore.getState().rerollCards();
+            if (adFree || rerollAdUnlocked) useBattleStore.getState().rerollCards();
             else setAdKind('cardReroll');
           }}
-          rerollUsed={rerollUsed}
-          rerollFree={adFree}
+          rerollFree={adFree || rerollAdUnlocked}
         />
       )}
 

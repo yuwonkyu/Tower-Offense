@@ -24,9 +24,10 @@ export type AdRewardKind =
  * 골드는 현금이 아닌 다이아로 구매 (progressStore.buyGoldPack).
  */
 export const IAP_PRODUCTS = {
-  diamonds_x1: { name: '다이아 100', diamonds: 100, priceLabel: '$0.99', bonusLabel: '' },
-  diamonds_x10: { name: '다이아 1,100', diamonds: 1100, priceLabel: '$9.99', bonusLabel: '+10% 보너스' },
-  diamonds_x100: { name: '다이아 12,000', diamonds: 12000, priceLabel: '$99.99', bonusLabel: '+20% 보너스' },
+  // 획득 다이아 ×2.5 (비용 동결 — 넉넉한 경제, 피드백). 묶음 보너스 +10%/+20% 구조 유지
+  diamonds_x1: { name: '다이아 250', diamonds: 250, priceLabel: '$0.99', bonusLabel: '' },
+  diamonds_x10: { name: '다이아 2,750', diamonds: 2750, priceLabel: '$9.99', bonusLabel: '+10% 보너스' },
+  diamonds_x100: { name: '다이아 30,000', diamonds: 30000, priceLabel: '$99.99', bonusLabel: '+20% 보너스' },
   // 프리미엄 패스(평생 1회): 광고 제거 + x4 영구 + 리롤 무료(픽당 1회) + 정산 골드 2배
   // 가격: 분석 권장 ₩19,000~29,000 (다이아 미지급 QoL 번들 — 고래팩가 회피, 전환율 확보)
   adFree: { name: '프리미엄 패스', priceLabel: '₩29,000', bonusLabel: '' },
@@ -37,8 +38,8 @@ export type IapProductId = keyof typeof IAP_PRODUCTS;
 /** 다이아 현금팩 묶음 (UI 표시 순서) */
 export const DIAMOND_PACK_IDS = ['diamonds_x1', 'diamonds_x10', 'diamonds_x100'] as const;
 
-/** 무료 다이아 광고 보상량 */
-export const AD_FREE_DIAMONDS = 20;
+/** 무료 다이아 광고 보상량 (×2.5 — 넉넉한 경제, 피드백) */
+export const AD_FREE_DIAMONDS = 50;
 /** 일일 리워드 광고 한도 (설계 06 권장 10~20회) */
 export const DAILY_AD_LIMIT = 15;
 

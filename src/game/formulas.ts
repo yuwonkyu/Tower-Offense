@@ -174,12 +174,12 @@ export function bulkGachaCost(baseCost: number, times: number, discountPct: numb
   return Math.floor(baseCost * times * (1 - discountPct / 100));
 }
 
-/** 골드 상점: 다이아로 골드 구매 (현금 X). 묶음일수록 보너스 골드↑ */
+/** 골드 상점: 다이아로 골드 구매 (현금 X). 획득 골드 ×2.5 — 비용 동결, 넉넉한 경제 (피드백) */
 export const GOLD_SHOP_PACKS = [
-  { diamonds: 10, gold: 1000, bonusLabel: '' },
-  { diamonds: 50, gold: 5500, bonusLabel: '+10%' },
-  { diamonds: 100, gold: 12000, bonusLabel: '+20%' },
+  { diamonds: 10, gold: 2500, bonusLabel: '' },
+  { diamonds: 50, gold: 13750, bonusLabel: '+10%' },
+  { diamonds: 100, gold: 30000, bonusLabel: '+20%' },
 ] as const;
 
-/** 일일 무료 선물 (매일 접속 1회) */
-export const DAILY_GIFT = { gold: 500, diamonds: 10 } as const;
+/** 일일 무료 선물 (매일 접속 1회) — ×2.5 (넉넉한 경제, 피드백) */
+export const DAILY_GIFT = { gold: 1250, diamonds: 25 } as const;

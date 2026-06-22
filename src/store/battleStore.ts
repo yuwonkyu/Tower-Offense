@@ -48,8 +48,10 @@ interface BattleState {
   pickChoices: CardDef[];
   /** 카드 선택 남은 시간 (초) — 만료 시 랜덤 선택 */
   pickTimeLeft: number;
-  /** 이번 선택에서 리롤(광고) 사용 여부 — 픽당 1회 */
+  /** 이번 선택에서 리롤(광고) 사용 여부 — 레거시(미사용) */
   rerollUsed: boolean;
+  /** 리롤 광고 1회 시청 → 그 판의 모든 리롤 무료·무제한 (피드백) */
+  rerollAdUnlocked: boolean;
   /** x4 배속 세션 해금 (광고 시청) — adFree 구매 시 항상 개방 */
   x4Unlocked: boolean;
   /** 승리 보상 2배 적용 여부 (광고, 1회) */
@@ -133,6 +135,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   pickChoices: [],
   pickTimeLeft: 0,
   rerollUsed: false,
+  rerollAdUnlocked: false,
   x4Unlocked: false,
   rewardDoubled: false,
   resourceAutoActive: false,
@@ -172,6 +175,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
       pickChoices: [],
       pickTimeLeft: 0,
       rerollUsed: false,
+      rerollAdUnlocked: false, // 판마다 초기화 — 광고 1회로 그 판 무한 무료
       rewardDoubled: false,
       resourceAutoActive: false,
       resourceGain: { gold: 0, diamonds: 0 },
@@ -307,11 +311,11 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   rerollCards: () => {
     const s = get();
-    // 리롤은 픽당 1회 (프리미엄=무료·광고X / 일반=광고) — 무료/광고 분기는 battle.tsx
-    if (s.phase !== 'cardPick' || s.rerollUsed || !s.engine) return;
+    // 리롤 무제한 — 광고 1회 시청 시 그 판 전체 무료(rerollAdUnlocked). 무료/광고 분기는 battle.tsx
+    if (s.phase !== 'cardPick' || !s.engine) return;
     const pickChoices = s.engine.cards.rollChoices(3);
     if (pickChoices.length === 0) return;
-    set({ pickChoices, rerollUsed: true, pickTimeLeft: CARD_PICK_SECONDS });
+    set({ pickChoices, pickTimeLeft: CARD_PICK_SECONDS });
   },
 
   cycleSpeed: () => {

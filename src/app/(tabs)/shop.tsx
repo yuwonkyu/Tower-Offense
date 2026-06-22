@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AdStubModal } from '@/components/AdStubModal';
@@ -59,24 +59,40 @@ export default function ShopScreen() {
 
   const canClaimGift = dailyGiftDate !== todayStr();
 
-  const handleUnitPull = (times: number) => {
-    const items = pullUnitGacha(times);
-    if (items.length > 0) setResult({ type: 'unit', items });
+  // 연타 중복구매 방지: 한 번 누르면 잠깐 잠금 — 확인 모달 뜨기 전 다중 구매 방지 (피드백)
+  const busyRef = useRef(false);
+  const guard = (fn: () => void) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    fn();
+    setTimeout(() => {
+      busyRef.current = false;
+    }, 600);
   };
-  const handleHeroPull = (times: number) => {
-    const res = pullHeroGacha(times);
-    if (res.heroes.length > 0) setResult({ type: 'hero', ...res });
-  };
-  const handleBuyGold = (i: number) => {
-    if (buyGoldPack(i)) setToast(`금화 +${GOLD_SHOP_PACKS[i].gold.toLocaleString()} 획득`);
-  };
-  const handleClaimGift = () => {
-    const g = claimDailyGift();
-    if (g) setResult({ type: 'gift', ...g });
-  };
-  const handlePurchase = (id: IapProductId) => {
-    if (purchase(id)) setToast(`${IAP_PRODUCTS[id].name} 구매 완료`);
-  };
+
+  const handleUnitPull = (times: number) =>
+    guard(() => {
+      const items = pullUnitGacha(times);
+      if (items.length > 0) setResult({ type: 'unit', items });
+    });
+  const handleHeroPull = (times: number) =>
+    guard(() => {
+      const res = pullHeroGacha(times);
+      if (res.heroes.length > 0) setResult({ type: 'hero', ...res });
+    });
+  const handleBuyGold = (i: number) =>
+    guard(() => {
+      if (buyGoldPack(i)) setToast(`금화 +${GOLD_SHOP_PACKS[i].gold.toLocaleString()} 획득`);
+    });
+  const handleClaimGift = () =>
+    guard(() => {
+      const g = claimDailyGift();
+      if (g) setResult({ type: 'gift', ...g });
+    });
+  const handlePurchase = (id: IapProductId) =>
+    guard(() => {
+      if (purchase(id)) setToast(`${IAP_PRODUCTS[id].name} 구매 완료`);
+    });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
