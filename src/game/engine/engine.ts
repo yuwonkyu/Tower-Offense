@@ -271,6 +271,10 @@ export interface Projectile {
   attackerId: number;
   /** 타워 조준 (정지 목표 — 항상 명중) */
   targetTower: boolean;
+  /** 호밍 대상 id — 설정 시 매 틱 타깃 위치 추적 (영웅 화살: 항상 명중) */
+  homingId?: number;
+  /** 영웅 화살 비주얼 플래그 (구분된 색 + 비행 잔상) */
+  arrow?: boolean;
 }
 
 /** 전투 시각 이펙트 (스킬/광역 발동 위치 — 퍼지며 사라지는 링). 렌더 전용, 시뮬은 무시 */
@@ -319,6 +323,8 @@ const ALLY_SPAWN_RATE_PER_CARD = 1.0;
 const AGGRO_BONUS = 14;
 /** 영웅 탐지 범위 — 근접 영웅도 원거리 포격에 대응하도록 넓게 */
 const HERO_AGGRO = 35;
+/** 영웅 원거리 투사체 속도 — 호밍이라 항상 명중, 빠른 비행 비주얼용 */
+const HERO_PROJECTILE_SPEED = 30;
 /** 적 영웅 스킬 시전 경고 시간 (초) — 텔레그래프 후 타격 (P2 위협 가독성) */
 const METEOR_CAST = 0.9;
 const SWEEP_CAST = 0.7;
@@ -367,7 +373,7 @@ const CATAPULT_MIN_RANGE = 6;
 /** 생존 적 이 수 이하일 때 공성(타워) 피해 배수 (섬멸 마무리 보상) */
 const SIEGE_CLEANUP_THRESHOLD = 30;
 const SIEGE_CLEANUP_MULT = 1.5;
-/** 용맹(마루한): 이 반경 내 아군에게 광역 스탯 버프 (피드백 — 범위 확대 34→44) */
+/** 용맹(마루한): 시전 이펙트 링 반경 (버프 자체는 전군 적용 — applyValorBuff) */
 const VALOR_RADIUS = 44;
 /** 수호 오라(방패병 Lv5): 이 반경 내 아군 피해감소 (카드 개편) */
 const SHIELD_AURA_RADIUS = 12;
@@ -556,13 +562,11 @@ export class BattleEngine {
     return true;
   }
 
-  /** 용맹: 반경 내 아군 유닛(영웅 제외 — 영웅은 heroBuffPct로 처리)에 스탯 % 버프 */
+  /** 용맹: 아군 유닛 전군(영웅 제외 — 영웅은 heroBuffPct로 처리)에 스탯 % 버프 (피드백 — 반경 제한 없이 전체 적용) */
   private applyValorBuff(pct: number, duration: number) {
-    const h = this.hero;
     for (const e of this.entities) {
       if (e.side !== 'ally' || e.kind === 'hero' || e.state === 'dead') continue;
       if (isStructure(e.kind)) continue;
-      if (Math.hypot(e.x - h.x, e.y - h.y) > VALOR_RADIUS) continue;
       if (e.buffLeft > 0) this.removeValorBuff(e); // 재시전 — 기존 버프 갱신
       const f = 1 + pct / 100;
       const ratio = e.maxHp > 0 ? e.hp / e.maxHp : 1;
@@ -753,7 +757,8 @@ export class BattleEngine {
       regenPctPerSec: HERO_BASE_REGEN_PCT,
       frenzyAtkPct: 0,
       stunLeft: 0,
-      projectileSpeed: 0,
+      // 원거리 영웅(미르 등 사거리≥6)은 호밍 화살 발사 — 시각 이펙트 + 항상 명중
+      projectileSpeed: s.range >= 6 ? HERO_PROJECTILE_SPEED : 0,
       attackCd: 0,
       retargetCd: 0,
       targetId: NO_TARGET,
@@ -1386,7 +1391,15 @@ export class BattleEngine {
         const dx = e.x - towerX;
         const dy = e.y - towerY;
         const d = Math.hypot(dx, dy) || 1;
-        this.launchProjectile(e, towerX + (dx / d) * towerRadius * 0.7, towerY + (dy / d) * towerRadius * 0.7, true, siegeAtk);
+        this.launchProjectile(
+          e,
+          towerX + (dx / d) * towerRadius * 0.7,
+          towerY + (dy / d) * towerRadius * 0.7,
+          true,
+          siegeAtk,
+          undefined,
+          e.kind === 'hero', // 영웅이면 타워 포격도 시안 화살 비주얼
+        );
       } else {
         this.damageTower(siegeAtk);
       }
@@ -1413,8 +1426,13 @@ export class BattleEngine {
   /** 단일/광역 공격 수행. 회피 판정 포함 */
   private performAttack(attacker: CombatEntity, target: CombatEntity) {
     if (attacker.projectileSpeed > 0) {
-      // 지면 조준 투사체: 발사 시점 타깃 위치로 비행 — 이동하면 빗나감
-      this.launchProjectile(attacker, target.x, target.y, false);
+      if (attacker.kind === 'hero') {
+        // 영웅 화살: 호밍(항상 명중) + 전용 비주얼
+        this.launchProjectile(attacker, target.x, target.y, false, undefined, target.id, true);
+      } else {
+        // 지면 조준 투사체(투석기): 발사 시점 타깃 위치로 비행 — 이동하면 빗나감
+        this.launchProjectile(attacker, target.x, target.y, false);
+      }
       return;
     }
     // 활/마법은 즉시타격이지만 발사 시각 트레이서를 남긴다 (피드백 3)
@@ -1518,7 +1536,15 @@ export class BattleEngine {
 
   // ── 투사체 ────────────────────────────────────────────
 
-  private launchProjectile(attacker: CombatEntity, tx: number, ty: number, targetTower: boolean, atkOverride?: number) {
+  private launchProjectile(
+    attacker: CombatEntity,
+    tx: number,
+    ty: number,
+    targetTower: boolean,
+    atkOverride?: number,
+    homingId?: number,
+    arrow?: boolean,
+  ) {
     let atk = atkOverride ?? attacker.atk;
     if (attacker.frenzyAtkPct > 0 && attacker.hp <= attacker.maxHp * 0.5) {
       atk *= 1 + attacker.frenzyAtkPct / 100;
@@ -1532,13 +1558,15 @@ export class BattleEngine {
       ty,
       speed: attacker.projectileSpeed,
       atk,
-      aoe: Math.max(attacker.aoe, 1.5),
+      aoe: arrow ? attacker.aoe : Math.max(attacker.aoe, 1.5), // 영웅 화살=단일 타깃(궁사) / 투석탄=최소 1.5 광역
       critChance: attacker.critChance,
       burnChance: attacker.burnChance,
       burnPct: attacker.burnPct,
       stunSec: attacker.stunOnHit,
       attackerId: attacker.id,
       targetTower,
+      homingId,
+      arrow,
     });
   }
 
@@ -1546,6 +1574,13 @@ export class BattleEngine {
     if (this.projectiles.length === 0) return;
     const flying: Projectile[] = [];
     for (const p of this.projectiles) {
+      if (p.homingId !== undefined) {
+        const t = this.byId.get(p.homingId);
+        if (t && t.state !== 'dead') {
+          p.tx = t.x;
+          p.ty = t.y;
+        }
+      }
       const dx = p.tx - p.x;
       const dy = p.ty - p.y;
       const dist = Math.hypot(dx, dy);
@@ -1587,6 +1622,7 @@ export class BattleEngine {
         this.retaliate(c, shooter.id);
       }
     }
+    if (p.arrow) this.spawnEffect(p.tx, p.ty, 2.4, 'rgba(150,210,255,0.9)', 0.22); // 영웅 화살 명중 섬광
   }
 
   // ── 트랩 / 적 영웅 (설계 09, 11) ──────────────────────
@@ -1998,7 +2034,8 @@ export class BattleEngine {
       }
       return;
     }
-    const reached = this.moveToward(e, nearest.x, nearest.y, e.aoe * 0.5, dt);
+    // 근접 신관: 블래스트 반경 근처에 도달하면 터진다 (코앞까지 비비지 않게 — 피드백)
+    const reached = this.moveToward(e, nearest.x, nearest.y, e.aoe * 0.8, dt);
     if (!reached) {
       e.state = 'moving';
       return;
@@ -2016,7 +2053,10 @@ export class BattleEngine {
 
   /**
    * 아군 유닛 뭉침 방지 (피드백 1·9): 가까운 아군끼리 서로 밀어냄.
-   * 영웅/구조물 제외. 원거리 화력 과집중·공성 광역 취약 완화.
+   * 영웅/구조물/폭탄병 제외 (폭탄병은 돌진해 자폭해야 하므로 밀어내면 타깃 도달 실패).
+   * 원거리 화력 과집중·공성 광역 취약 완화.
+   * 적은 분산 미적용 — 역방향 타워디펜스 특성상 적을 흩뜨리면 방어선이 얇게 퍼져
+   * 아군이 뚫지 못함(시뮬: 스20 75%→20%). 시각적 적 뭉침은 렌더 단계에서 처리.
    */
   private applySeparation() {
     const entities = this.entities;
@@ -2024,10 +2064,10 @@ export class BattleEngine {
     const { width, height } = this.field;
     for (let i = 0; i < len; i++) {
       const a = entities[i];
-      if (a.state === 'dead' || a.side !== 'ally' || a.kind === 'hero' || isStructure(a.kind)) continue;
+      if (a.state === 'dead' || a.side !== 'ally' || a.kind === 'hero' || a.kind === 'bomber' || isStructure(a.kind)) continue;
       for (let j = i + 1; j < len; j++) {
         const b = entities[j];
-        if (b.state === 'dead' || b.side !== 'ally' || b.kind === 'hero' || isStructure(b.kind)) continue;
+        if (b.state === 'dead' || b.side !== 'ally' || b.kind === 'hero' || b.kind === 'bomber' || isStructure(b.kind)) continue;
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const dist = Math.hypot(dx, dy);

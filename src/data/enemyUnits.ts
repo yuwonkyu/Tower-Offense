@@ -64,8 +64,8 @@ export const NEW_ENEMY_UNITS: UnitDef[] = [
     id: 'bomber',
     name: '폭탄병',
     concept: '자폭 광역',
-    // 100 / 자폭 / 450 / 재생10 / 근거리 / 330 / 빠름
-    stats: { atk: 100, def: 3, hp: 450, moveSpeed: 6.1, range: 0, atkSpeed: 1, aoe: 5 },
+    // 110 / 자폭 / 450 / 재생10 / 근거리 / 330 / 빠름 (atk +10% — 피드백)
+    stats: { atk: 110, def: 3, hp: 450, moveSpeed: 6.1, range: 0, atkSpeed: 1, aoe: 5 },
     regenPctPerSec: 2.22,
     priority: 'cluster',
     exp: 10,

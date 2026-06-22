@@ -56,11 +56,21 @@ const UNIT_VISUALS: Record<EntityKind, { color: string; radius: number }> = {
 
 const PROJECTILE_COLOR = 'rgba(255,236,180,1)'; // 본체 (밝게)
 const PROJECTILE_GLOW = 'rgba(255,160,70,0.4)'; // 외곽 글로우 (불타는 공성탄 느낌, 가시성↑)
+const ARROW_COLOR = 'rgba(205,240,255,1)'; // 영웅 화살 본체 (시안빛 — 투석탄과 구분)
+const ARROW_GLOW = 'rgba(95,185,255,0.45)'; // 영웅 화살 글로우 + 비행 잔상
 
 const ALLY_STROKE = 'rgba(120,200,255,0.9)';
+const ENEMY_STROKE = 'rgba(255,70,70,0.95)'; // 적 유닛 빨강 테두리 — 아군(시안)과 즉시 구분 (프로토타입 가독성)
 
 /** 피격 순간 번쩍 (타격감) */
 const HIT_COLOR = 'rgba(255,255,255,0.95)';
+
+/** 영웅 클래스 테마 색 (오라/본체/테두리) — Phase1 절차적 디자인 */
+const HERO_THEME: Record<string, { body: string; aura: string; ring: string }> = {
+  maruhan: { body: 'rgba(255,180,90,0.95)', aura: 'rgba(255,170,80,0.14)', ring: 'rgba(255,212,150,1)' },
+  mir: { body: 'rgba(110,185,255,0.95)', aura: 'rgba(120,190,255,0.14)', ring: 'rgba(195,232,255,1)' },
+  noeul: { body: 'rgba(193,132,247,0.95)', aura: 'rgba(182,122,247,0.14)', ring: 'rgba(222,184,255,1)' },
+};
 
 interface Props {
   config: StageConfig;
@@ -182,13 +192,53 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       return p;
     };
 
-    // 적 타워 (원형 영역)
-    canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * scale, fill('rgba(180,50,50,0.14)'));
-    canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * scale, stroke(towerColor, 2));
-    canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * 0.45 * scale, fill('rgba(220,80,80,0.5)'));
-    if (engine.towerFlash > 0) {
-      canvas.drawCircle(towerX * scale, towerY * scale, towerRadius * scale, fill('rgba(255,90,90,0.45)'));
+    // ── 배경: 베이스 + 세로 그라데이션 밴드 + 타워 메나스 글로우 + 지면 깊이 ──
+    const W = size.w;
+    const H = size.h;
+    const tx = towerX * scale;
+    const ty = towerY * scale;
+    const tr = towerRadius * scale;
+    canvas.drawColor(Skia.Color('#0e0f1c'));
+    const bands = 14;
+    for (let i = 0; i < bands; i++) {
+      const t = i / (bands - 1);
+      const r = Math.round(10 + 16 * t);
+      const g = Math.round(11 + 11 * t);
+      const b = Math.round(22 + 16 * t);
+      canvas.drawRect(Skia.XYWHRect(0, (H * i) / bands, W, H / bands + 1), fill(`rgb(${r},${g},${b})`));
     }
+    // 타워 메나스 글로우 (적 위협감) — 동심원 누적으로 방사형 falloff
+    for (let i = 7; i >= 1; i--) {
+      canvas.drawCircle(tx, ty, tr + i * 10 * scale, fill('rgba(150,40,46,0.05)'));
+    }
+    // 지면 깊이감 — 타워 중심 동심 링
+    for (let i = 1; i <= 3; i++) {
+      canvas.drawCircle(tx, ty, tr + i * 22 * scale, stroke('rgba(255,255,255,0.03)', 1));
+    }
+
+    // ── 적 타워: 상단 요새 (4단계 손상 외관) ──
+    const dmgStage = towerPct > 0.6 ? 0 : towerPct > 0.3 ? 1 : towerPct > 0 ? 2 : 3;
+    const wallCol = dmgStage >= 2 ? '#5a5550' : '#777067';
+    canvas.drawCircle(tx, ty + tr * 0.14, tr * 1.2, fill('rgba(0,0,0,0.4)')); // 토대 그림자
+    canvas.drawCircle(tx, ty, tr, fill('#393530')); // 외벽 채움
+    canvas.drawCircle(tx, ty, tr, stroke(wallCol, 2.4)); // 외벽 링
+    // 흉벽(크레넬) — 손상 단계별 일부 결손
+    const merlons = 12;
+    for (let i = 0; i < merlons; i++) {
+      if (dmgStage === 1 && i % 5 === 0) continue;
+      if (dmgStage === 2 && i % 2 === 0) continue;
+      if (dmgStage === 3 && i % 3 !== 0) continue;
+      const a = (i / merlons) * Math.PI * 2;
+      canvas.drawCircle(tx + Math.cos(a) * tr, ty + Math.sin(a) * tr, tr * 0.17, fill(wallCol));
+    }
+    canvas.drawCircle(tx, ty, tr * 0.6, fill(dmgStage >= 2 ? '#2a2622' : '#48433c')); // 안뜰
+    canvas.drawCircle(tx, ty, tr * 0.34, fill(dmgStage >= 3 ? '#7a2a1a' : towerColor)); // 중앙 키프 (HP 색)
+    if (dmgStage >= 2) {
+      canvas.drawCircle(tx - tr * 0.42, ty + tr * 0.32, tr * 0.12, fill('#2a2622')); // 잔해
+      canvas.drawCircle(tx + tr * 0.5, ty - tr * 0.22, tr * 0.09, fill('#2a2622'));
+    }
+    if (dmgStage === 3) canvas.drawCircle(tx, ty, tr * 0.5, fill('rgba(255,80,40,0.28)')); // 폐허 잔불
+    if (engine.towerFlash > 0) canvas.drawCircle(tx, ty, tr * 1.06, fill('rgba(255,90,90,0.45)')); // 피격 플래시
 
     // 구조물: 성벽/바리케이트/트랩
     for (const e of structures) {
@@ -201,6 +251,11 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       const v = UNIT_VISUALS[e.kind];
       canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, fill(e.hitFlash > 0 ? HIT_COLOR : v.color));
     }
+    // 적 유닛 빨강 테두리 — 아군(시안)과 즉시 구분 (프로토타입 가독성, 피드백)
+    for (const e of enemies) {
+      const v = UNIT_VISUALS[e.kind];
+      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, stroke(ENEMY_STROKE, 1.2));
+    }
 
     // 아군 유닛 (채움 + 시안 테두리)
     for (const e of allies) {
@@ -212,10 +267,25 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, stroke(ALLY_STROKE, 1.2));
     }
 
-    // 투사체 (투석기 돌덩이) — 가시성↑: 외곽 글로우 + 밝은 본체
+    // 투사체 — 투석탄(주황 글로우) / 영웅 화살(시안 글로우 + 비행 잔상, 호밍)
     for (const p of engine.projectiles) {
-      canvas.drawCircle(p.x * scale, p.y * scale, 3.6 * scale, fill(PROJECTILE_GLOW));
-      canvas.drawCircle(p.x * scale, p.y * scale, 1.9 * scale, fill(PROJECTILE_COLOR));
+      if (p.arrow) {
+        const dx = p.tx - p.x;
+        const dy = p.ty - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const bx = (dx / d) * scale;
+        const by = (dy / d) * scale;
+        const px = p.x * scale;
+        const py = p.y * scale;
+        // 비행 방향 뒤쪽 잔상 2개 → 슈팅 스트릭
+        canvas.drawCircle(px - bx * 2.4, py - by * 2.4, 1.1 * scale, fill(ARROW_GLOW));
+        canvas.drawCircle(px - bx * 4.8, py - by * 4.8, 0.7 * scale, fill(ARROW_GLOW));
+        canvas.drawCircle(px, py, 3.2 * scale, fill(ARROW_GLOW));
+        canvas.drawCircle(px, py, 1.5 * scale, fill(ARROW_COLOR));
+      } else {
+        canvas.drawCircle(p.x * scale, p.y * scale, 3.6 * scale, fill(PROJECTILE_GLOW));
+        canvas.drawCircle(p.x * scale, p.y * scale, 1.9 * scale, fill(PROJECTILE_COLOR));
+      }
     }
 
     // 트레이서 (활/마법 즉시타격 시각 — 발사점→타깃 보간 이동)
@@ -254,19 +324,19 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       }
     }
 
-    // 아군 영웅
-    const heroColor = heroDead
-      ? 'rgba(120,120,140,0.5)'
-      : hero.hitFlash > 0
-        ? HIT_COLOR
-        : 'rgba(100,180,255,0.9)';
-    canvas.drawCircle(hero.x * scale, hero.y * scale, engine.field.heroRadius * scale, fill(heroColor));
-    canvas.drawCircle(
-      hero.x * scale,
-      hero.y * scale,
-      engine.field.heroRadius * scale,
-      stroke(heroDead ? 'rgba(150,150,170,0.5)' : 'rgba(160,220,255,0.9)', 1.5),
-    );
+    // 아군 영웅 — 클래스 테마 오라 + 본체 + 표식
+    const theme = HERO_THEME[heroDef.id] ?? HERO_THEME.mir;
+    const hx = hero.x * scale;
+    const hy = hero.y * scale;
+    const hr = engine.field.heroRadius * scale;
+    if (!heroDead) {
+      canvas.drawCircle(hx, hy, hr * 2.3, fill(theme.aura)); // 외곽 오라
+      canvas.drawCircle(hx, hy, hr * 1.6, fill(theme.aura)); // 내곽 오라 (누적 → 밝아짐)
+    }
+    const heroBody = heroDead ? 'rgba(120,120,140,0.5)' : hero.hitFlash > 0 ? HIT_COLOR : theme.body;
+    canvas.drawCircle(hx, hy, hr, fill(heroBody));
+    canvas.drawCircle(hx, hy, hr, stroke(heroDead ? 'rgba(150,150,170,0.5)' : theme.ring, 1.8));
+    if (!heroDead) canvas.drawCircle(hx, hy, hr * 0.42, fill('rgba(255,255,255,0.92)')); // 영웅 표식
   });
 
   return (
