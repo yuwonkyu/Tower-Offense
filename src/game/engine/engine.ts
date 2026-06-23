@@ -55,8 +55,8 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
     width,
     height,
     towerX: width / 2,
-    // 타워는 화면 정중앙(대칭 공성). 배경 맵의 클리어링은 BattleField에서 이 타워 위치에 맞춰 정렬한다.
-    towerY: height * 0.5,
+    // 타워를 화면 중앙에서 살짝 위로 (0.50→0.47, 피드백). 배경 클리어링(정중앙)보다 약간 위에 앉음.
+    towerY: height * 0.47,
     towerRadius: 11,
     heroX: width / 2,
     heroY: height * 0.74,
