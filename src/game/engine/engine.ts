@@ -55,9 +55,8 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
     width,
     height,
     towerX: width / 2,
-    // 타워 Y = 배경 맵 클리어링(태양 방사형 수렴점)의 세로 위치(이미지 ~44%)에 맞춤.
-    // cover가 세로를 꽉 채워 이미지비율=화면비율 → 이 값이 곧 화면상 위치. 360° 포위/공성 대칭 (피드백)
-    towerY: height * 0.44,
+    // 타워는 화면 정중앙(대칭 공성). 배경 맵의 클리어링은 BattleField에서 이 타워 위치에 맞춰 정렬한다.
+    towerY: height * 0.5,
     towerRadius: 11,
     heroX: width / 2,
     heroY: height * 0.74,
@@ -409,6 +408,11 @@ const EXECUTE_BOSS_MULT = 7;
 /** 피격 플래시 지속(초) — 타격감 연출 (렌더 전용) */
 const HIT_FLASH = 0.08;
 const TOWER_FLASH = 0.14;
+/** 타워 발악(피드백): HP 이 비율 이하 시 주기적 광역 넉백 + 적 타격 넉백 — 공성군이 타워만 비비는 것 방지 */
+const TOWER_DESPERATION_PCT = 0.5;
+const DESP_PULSE_INTERVAL = 4; // 광역 넉백 펄스 주기(초)
+const DESP_KNOCKBACK = 18; // 넉백 거리 = 투석기 최대 사거리
+const ENEMY_KNOCKBACK_CHANCE = 0.1; // 발악 중 적 타격 시 아군 넉백 확률
 
 export type EngineResult = 'ongoing' | 'victory';
 
@@ -437,6 +441,8 @@ export class BattleEngine {
   invulnLeft = 0;
   /** 타워 피격 플래시 남은 시간 (초) — 렌더 전용 */
   towerFlash = 0;
+  /** 타워 발악 펄스 쿨다운 (HP 50%↓ 광역 넉백 주기) */
+  private despPulseCd = 0;
   /** 영웅 스킬 남은 쿨타임 (초) — HUD가 동기화 */
   heroSkillCd = 0;
   /** 투신(스탯 버프) 잔여 시간 */
@@ -518,6 +524,11 @@ export class BattleEngine {
   private get deployMode(): boolean {
     const f = this.config.formation;
     return !!f && Object.keys(f).length > 0;
+  }
+
+  /** 타워 발악 모드 — HP 50% 이하 (광역 넉백 + 적 타격 넉백 발동) */
+  private get towerDesperate(): boolean {
+    return this.towerHp > 0 && this.towerHp <= this.config.tower.hp * TOWER_DESPERATION_PCT;
   }
 
   /** 카드 선택권 소비. Lv5 MAX 도달 시 추가 선택권 (설계 07) */
@@ -674,6 +685,7 @@ export class BattleEngine {
     this.updateRevive(dt);
     this.updateEnemyHero(dt);
     this.updatePendingStrikes(dt);
+    this.updateTowerDesperation(dt);
     this.updateAuras();
     this.act(dt);
     this.applySeparation();
@@ -1091,14 +1103,14 @@ export class BattleEngine {
     }
   }
 
-  /** 배치형 보충: 진형 손실분을 reinforcePctPerMin 속도로 캡(진형 마릿수)까지 외곽에서 충원 */
+  /**
+   * 배치 garrison 유지 (피드백 — "초당 유닛 생성 유지"): 손실분을 초당 스폰(config.spawnRate)으로
+   * 진형 마릿수까지 지속 보충한다. 다 잡으면 끝이 아니라 수비대가 계속 재충원되며 수성 → 공성 압박 유지.
+   */
   private reinforceFormation(dt: number) {
     const f = this.config.formation;
-    const pct = this.config.reinforcePctPerMin ?? 0;
-    if (!f || pct <= 0) return;
-    let totalTarget = 0;
-    for (const n of Object.values(f)) totalTarget += n ?? 0;
-    this.reinforceAcc += ((totalTarget * pct) / 100 / 60) * dt;
+    if (!f) return;
+    this.reinforceAcc += this.config.spawnRate * dt;
     while (this.reinforceAcc >= 1) {
       // 결손(목표−현재)이 큰 종류부터 보충
       let bestU: UnitId | null = null;
@@ -1254,6 +1266,34 @@ export class BattleEngine {
         e.y = towerY;
       }
     }
+  }
+
+  /** 타워 중심에서 바깥으로 dist만큼 밀어냄 (발악 넉백) */
+  private knockbackFromTower(e: CombatEntity, dist: number) {
+    const { towerX, towerY, width, height } = this.field;
+    const dx = e.x - towerX;
+    const dy = e.y - towerY;
+    const d = Math.hypot(dx, dy) || 1;
+    e.x = Math.min(width - 3, Math.max(3, e.x + (dx / d) * dist));
+    e.y = Math.min(height - 3, Math.max(3, e.y + (dy / d) * dist));
+  }
+
+  /** 타워 발악(HP 50%↓): 주기적으로 주변 공성 아군을 바깥으로 넉백 + 광역 피해 + 충격파 */
+  private updateTowerDesperation(dt: number) {
+    if (!this.towerDesperate) return;
+    this.despPulseCd -= dt;
+    if (this.despPulseCd > 0) return;
+    this.despPulseCd = DESP_PULSE_INTERVAL;
+    const { towerX, towerY } = this.field;
+    const radius = this.towerKeepout + 22; // 공성 링 + 여유 — 타워에 붙은 아군 대상
+    const dmg = this.enemyHeroAtk; // 적 영웅 공격력 기반 (스테이지 스케일 반영)
+    for (const e of this.entities) {
+      if (e.side !== 'ally' || e.state === 'dead' || isStructure(e.kind)) continue;
+      if (Math.hypot(e.x - towerX, e.y - towerY) > radius) continue;
+      this.knockbackFromTower(e, DESP_KNOCKBACK);
+      this.hurt(e, damage(dmg, e.def));
+    }
+    this.spawnEffect(towerX, towerY, radius, 'rgba(255,90,60,0.9)'); // 발악 충격파 링
   }
 
   // ── 영웅 부활 ─────────────────────────────────────────
@@ -1963,6 +2003,16 @@ export class BattleEngine {
     // 가시(체력 카드 MAX): 피격 시 주변 적 광역 (쿨타임 제한)
     if (target.thorns > 0 && target.thornsCd <= 0 && !isDead(target)) {
       this.thornsPulse(target);
+    }
+    // 타워 발악(50%↓): 적이 아군(영웅 제외) 타격 시 확률로 타워 밖 넉백 — 글루딜 방해 (피드백)
+    if (
+      attacker.side === 'enemy' &&
+      target.kind !== 'hero' &&
+      this.towerDesperate &&
+      !isDead(target) &&
+      Math.random() < ENEMY_KNOCKBACK_CHANCE
+    ) {
+      this.knockbackFromTower(target, DESP_KNOCKBACK);
     }
     if (isDead(target)) {
       // 코인 폭발 / 골드 즉사 (아군이 적 처치 시)
