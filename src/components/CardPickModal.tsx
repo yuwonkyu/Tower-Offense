@@ -32,8 +32,10 @@ interface Props {
   onPick: (cardId: string) => void;
   /** 리롤 버튼 (광고) — undefined면 숨김 */
   onReroll?: () => void;
-  /** 무료 리롤 여부 (프리미엄 패스 또는 광고 1회 시청 후 — 그 판 무한 무료) */
+  /** 무료 리롤 여부 (프리미엄 패스 또는 광고 1회 시청 후 — 이후 픽마다 1회 무료) */
   rerollFree?: boolean;
+  /** 이번 카드선택에서 리롤을 이미 사용했는지 (픽당 1회 제한) */
+  rerollUsed?: boolean;
 }
 
 /** TFT 스타일 카드 선택 오버레이 — 미선택 시 랜덤 (설계 07) */
@@ -46,6 +48,7 @@ export function CardPickModal({
   onPick,
   onReroll,
   rerollFree,
+  rerollUsed,
 }: Props) {
   const timerPct = totalTime > 0 ? Math.max(0, timeLeft / totalTime) : 0;
 
@@ -124,11 +127,19 @@ export function CardPickModal({
         })}
       </View>
 
-      {/* 카드 재선택 — 무제한. 광고 1회 시청 시 그 판 전체 무료 (프리미엄=항상 무료) */}
+      {/* 카드 재선택 — 카드선택 1회당 1번. 광고 1회 시청 시 이후 픽마다 무료 (프리미엄=항상 무료) */}
       {onReroll && (
-        <Pressable style={styles.rerollBtn} onPress={onReroll}>
+        <Pressable
+          style={[styles.rerollBtn, rerollUsed && styles.rerollBtnUsed]}
+          onPress={onReroll}
+          disabled={rerollUsed}
+        >
           <Text style={styles.rerollText}>
-            {rerollFree ? '🔄 무료 재선택' : '📺 광고 보고 무한 무료 리롤'}
+            {rerollUsed
+              ? '🔄 리롤 사용됨 — 다음 레벨업에 1회'
+              : rerollFree
+                ? '🔄 무료 재선택 (1회)'
+                : '📺 광고 보고 리롤 (이후 픽마다 무료)'}
           </Text>
         </Pressable>
       )}

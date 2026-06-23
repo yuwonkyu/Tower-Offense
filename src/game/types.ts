@@ -152,7 +152,14 @@ export interface StageConfig {
   enemyHero: EnemyHeroId;
   /** 등장 적 유닛 풀 */
   enemyUnits: UnitId[];
-  /** 초당 총 스폰율 */
+  /**
+   * 배치형 수비 진형 (종류별 마릿수). 설정 시 "배치 vs 스폰" 모드:
+   * 시작에 일괄 배치 + reinforcePctPerMin로 보충(연속 스폰 X). 미설정 시 기존 spawnRate 스폰.
+   */
+  formation?: Partial<Record<UnitId, number>>;
+  /** 배치형 분당 보충률 % (진형 총량 대비, 캡=진형 마릿수). 0/미설정 = 보충 없음(일회성 돌파) */
+  reinforcePctPerMin?: number;
+  /** 초당 총 스폰율 (스폰형 전용) */
   spawnRate: number;
   /** 적 유닛 스탯 배수 (공/방/HP) */
   statMultiplier: number;

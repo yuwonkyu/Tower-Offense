@@ -17,6 +17,10 @@ interface StagePattern {
   unlocksUnit?: UnitId;
   /** 30스테이지: 팔라딘 등장 시점 (초). 10분 게임 기준 2분/6분 */
   bossAppearances?: number[];
+  /** 배치형 수비 진형 (종류별 마릿수). 설정 시 연속 스폰 대신 일괄 배치 + 보충 */
+  formation?: Partial<Record<UnitId, number>>;
+  /** 배치형 분당 보충률 % (0/미설정 = 일회성 돌파) */
+  reinforcePctPerMin?: number;
 }
 
 /**
@@ -24,12 +28,12 @@ interface StagePattern {
  * 인덱스 = 스테이지 - 1.
  */
 const STAGE_PATTERNS: StagePattern[] = [
-  // 1~10 학습 단계 (적 영웅 = 기사)
-  { units: ['swordsman'] }, // 1
-  { units: ['shield'] }, // 2
-  { units: ['archer'] }, // 3
-  { units: ['spear'] }, // 4
-  { units: ['catapult'] }, // 5
+  // 1~5 배치형 튜토리얼 (단일 종족 30 배치 · 보충 0 · 일회성 돌파)
+  { units: ['shield'], formation: { shield: 30 } }, // 1
+  { units: ['swordsman'], formation: { swordsman: 30 } }, // 2
+  { units: ['spear'], formation: { spear: 30 } }, // 3
+  { units: ['archer'], formation: { archer: 30 } }, // 4
+  { units: ['catapult'], formation: { catapult: 30 } }, // 5
   { units: ['swordsman', 'shield'] }, // 6
   { units: ['archer', 'spear'] }, // 7
   { units: ['shield', 'swordsman', 'archer'] }, // 8
@@ -96,6 +100,8 @@ export function getStageConfig(stage: number, difficulty: StageDifficulty = 'nor
     },
     enemyHero: enemyHeroForStage(stage).id,
     enemyUnits: pattern.units,
+    formation: pattern.formation,
+    reinforcePctPerMin: pattern.reinforcePctPerMin,
     spawnRate: spawnRateForStage(stage),
     statMultiplier: enemyStatMultiplier(stage) * (hard ? 1 + HARD_MODE.enemyStatBonus : 1),
     expMultiplier: expMultiplierForStage(stage),

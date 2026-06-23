@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { hardStagesUnlocked, TOTAL_STAGES } from '@/data/stages';
@@ -15,8 +15,15 @@ export default function HomeScreen() {
   const clearedStage = useProgressStore((s) => s.clearedStage);
   const hardCleared = useProgressStore((s) => s.hardCleared);
   const gold = useProgressStore((s) => s.gold);
+  const resetProgress = useProgressStore((s) => s._reset);
   const selectedHeroId = useProgressStore((s) => s.selectedHeroId);
   const selectedHero = HEROES.find((h) => h.id === selectedHeroId) ?? HEROES[0];
+
+  const onResetTest = () =>
+    Alert.alert('테스트 초기화', '진행도·재화·해금·영웅 메타를 모두 초기 상태로 되돌립니다.', [
+      { text: '취소', style: 'cancel' },
+      { text: '초기화', style: 'destructive', onPress: () => resetProgress() },
+    ]);
 
   const [mode, setMode] = useState<'normal' | 'hard'>('normal');
   const hard = mode === 'hard';
@@ -30,6 +37,9 @@ export default function HomeScreen() {
           {hard ? '하드 — 타워HP×2 · 적+20% · 보상×2' : '인간 종족 — 일반 모드'}
         </Text>
         <Text style={styles.goldChip}>◈ {gold.toLocaleString()}</Text>
+        <Pressable style={styles.resetBtn} onPress={onResetTest}>
+          <Text style={styles.resetText}>🔄 초기화</Text>
+        </Pressable>
       </View>
 
       {/* 난이도 토글 */}
@@ -134,6 +144,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.gold,
   },
+  resetBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(220,70,70,0.45)',
+    backgroundColor: 'rgba(220,70,70,0.12)',
+  },
+  resetText: { fontSize: 11, fontWeight: '700', color: 'rgba(255,120,120,0.95)' },
   modeRow: {
     flexDirection: 'row',
     gap: 8,

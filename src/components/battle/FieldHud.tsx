@@ -1,11 +1,15 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/theme';
+import { EnemyRoster } from '@/components/battle/EnemyRoster';
+import type { UnitId } from '@/game/types';
 import { useBattleStore } from '@/store/battleStore';
 
 interface Props {
   stage: number;
   hard: boolean;
+  /** 이 스테이지 적 편성 (적 카운트 옆 로스터 표시) */
+  enemyUnits: UnitId[];
   onSpeedPress: () => void;
 }
 
@@ -19,7 +23,7 @@ function formatTime(seconds: number): string {
  * 필드 위 오버레이: 적/아군 수 · 타이머 · 배속 · 스테이지 라벨.
  * 필드 관련 고빈도 값만 구독 → 타워바/영웅패널/캔버스와 분리되어 리렌더.
  */
-export const FieldHud = memo(function FieldHud({ stage, hard, onSpeedPress }: Props) {
+export const FieldHud = memo(function FieldHud({ stage, hard, enemyUnits, onSpeedPress }: Props) {
   const timeLeft = useBattleStore((s) => s.timeLeft);
   const speed = useBattleStore((s) => s.speed);
   const enemyCount = useBattleStore((s) => s.enemyCount);
@@ -28,8 +32,11 @@ export const FieldHud = memo(function FieldHud({ stage, hard, onSpeedPress }: Pr
 
   return (
     <>
-      <View style={[styles.countChip, styles.enemyCountChip]}>
-        <Text style={[styles.countText, styles.enemyCountText]}>적 {enemyCount}</Text>
+      <View style={styles.enemyTopLeft}>
+        <View style={styles.enemyChip}>
+          <Text style={[styles.countText, styles.enemyCountText]}>적 {enemyCount}</Text>
+        </View>
+        <EnemyRoster enemyUnits={enemyUnits} />
       </View>
 
       <View style={styles.fieldTopRight}>
@@ -95,9 +102,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     zIndex: 2,
   },
-  enemyCountChip: {
+  enemyTopLeft: {
+    position: 'absolute',
     top: 10,
     left: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    gap: 4,
+    maxWidth: '70%', // 타이머(우상단)와 충돌 방지 — 풀네임 칩이 넘치면 아래 줄로 래핑(최대 2줄 예상)
+    zIndex: 2,
+  },
+  enemyChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
     backgroundColor: 'rgba(220,70,70,0.14)',
     borderColor: 'rgba(220,70,70,0.4)',
   },

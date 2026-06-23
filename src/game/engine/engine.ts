@@ -20,7 +20,7 @@ import {
   expToNextLevel,
   HERO_BASE_REGEN_PCT,
 } from '@/game/formulas';
-import { spawnFreq, spawnWeightsForStage, supplyCost, type SpawnWeight } from '@/data/spawnWeights';
+import { spawnWeightsForStage, supplyCost, type SpawnWeight } from '@/data/spawnWeights';
 import { CardSystem, type UnitMods } from './cards';
 
 /** 전체 유닛 정의 룩업 */
@@ -55,8 +55,9 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
     width,
     height,
     towerX: width / 2,
-    // 타워를 살짝 아래로 (0.34→0.40) — 영웅(6시 생성)·하단 유닛 진입 거리 단축, 사방 결집 균형 (피드백)
-    towerY: height * 0.4,
+    // 타워를 화면 정중앙으로 (0.40→0.50) — cover 배경의 중앙 거점과 자동 정렬(모든 기기) +
+    // 사방 360° 포위/공성 대칭. 워3 타워서바이벌식 센터 거점 (피드백)
+    towerY: height * 0.5,
     towerRadius: 11,
     heroX: width / 2,
     heroY: height * 0.74,
@@ -321,6 +322,8 @@ interface PendingStrike {
 /** 동시 생존 캡 — 양측 동일 (포위 공성: 뭉치기 제거 후 대칭화). 폰 성능 균형점 200 (피드백) */
 // 소모 인구수 캡 — 양측 동일. 살아있는 유닛의 supplyCost 합이 이 값 이하 (1코스트 기준 200기)
 const SUPPLY_CAP = 200;
+/** 헤드스타트 — 시작 카드 선택권 (1번째=유닛 보장[rollChoices], 2·3=랜덤). 영웅 단독 시작 방지 (피드백) */
+const HEAD_START_PICKS = 3;
 /** 유닛 카드 보유 시 기본 초당 생성률 — 물량 스트림으로 전선 상시 유지 (모여서 출발 대신 연속 젠) */
 const ALLY_SPAWN_BASE = 2.0;
 /** 유닛 카드 1장당 추가 생성률 (설계 07: 카드마다 독립 생성) */
@@ -339,8 +342,13 @@ const ENEMY_DEFEND_RADIUS = 60;
 /** 적 대기 링: 추격 대상 없으면 타워 주변으로 귀환 */
 const ENEMY_GUARD_RING = 8;
 /** 적 배회 반경 — 추격 대상 없으면 타워 주변 이 범위를 순찰 (성에만 붙지 않게 — 피드백 4) */
-const ENEMY_ROAM_MIN = 16;
+const ENEMY_ROAM_MIN = 18;
 const ENEMY_ROAM_MAX = 52;
+/**
+ * 성 외곽 keep-out 여유: 유닛 중심이 타워중심에서 (towerRadius + 이 값) 안으로 들어오지 못한다.
+ * 성벽/흉벽 그래픽(≈towerRadius×1.2) 위로 유닛이 겹치지 않게 — 아군·적 공통 (피드백).
+ */
+const TOWER_KEEPOUT_MARGIN = 6;
 /**
  * 아군 랠리: 이 수 이상 모이면 웨이브로 진군.
  * 폰 피드백 — "모여서 출발"이 어색 → 물량 스트림으로 전환. 대기 없이 즉시 진군(=1),
@@ -421,8 +429,8 @@ export class BattleEngine {
   result: EngineResult = 'ongoing';
   /** 경과 게임 시간 (초) */
   time = 0;
-  /** 쌓인 카드 선택권 — 전투 시작 시 1회 + 레벨업마다 1회 */
-  pendingPicks = 1;
+  /** 쌓인 카드 선택권 — 전투 시작 시 헤드스타트 N회 + 레벨업마다 1회 */
+  pendingPicks = HEAD_START_PICKS;
   /** 인게임 카드 보유/풀 (설계 04, 05, 07) */
   readonly cards: CardSystem;
   /** 타워 무적 잔여 시간 (팔라딘 무적기) */
@@ -438,6 +446,7 @@ export class BattleEngine {
   private heroBuffPct = 0;
 
   private spawnAcc = 0;
+  private reinforceAcc = 0; // 배치형 보충 누적
   private allySpawnAcc = 0;
   /** 아군 포위 생성 각도 누적 — 골든 앵글로 360° 골고루 분산 (피드백 5) */
   private allySpawnAngle = 0;
@@ -445,7 +454,8 @@ export class BattleEngine {
   private allyWaveReady = false;
   private nextId = 1;
   private readonly weights: SpawnWeight[];
-  private readonly totalWeight: number;
+  /** 적 유닛 종류 목록 (1/n 캡 + 결손우선 스폰 선택용) */
+  private readonly enemyTypes: UnitId[];
   private readonly heroDef: HeroDef;
   private readonly byId = new Map<number, CombatEntity>();
 
@@ -471,7 +481,7 @@ export class BattleEngine {
   ) {
     this.unitMetaBonus = new Map(Object.entries(unitMetaBonuses));
     this.weights = spawnWeightsForStage(config.stage, config.enemyUnits);
-    this.totalWeight = this.weights.reduce((sum, w) => sum + w.weight, 0);
+    this.enemyTypes = this.weights.map((w) => w.unitId);
     this.heroDef = heroDef;
     this.towerHp = config.tower.hp;
     this.cards = new CardSystem(config.difficulty === 'hard', new Set(unlockedUnits));
@@ -491,11 +501,23 @@ export class BattleEngine {
       this.miniBossCd.set(id, MINI_BOSSES[id].spawnCooldown);
     }
     this.spawnStructures();
+    if (this.deployMode) this.deployFormation();
   }
 
   /** 현재 생성 가능한 아군 유닛 (보유 유닛 카드) */
   get activeUnitCards(): UnitId[] {
     return this.cards.ownedUnits;
+  }
+
+  /** 성 외곽 keep-out 반경 (타워중심 기준) — 유닛이 이 안으로 들어오지 않음 (성 UI 겹침 방지) */
+  private get towerKeepout(): number {
+    return this.field.towerRadius + TOWER_KEEPOUT_MARGIN;
+  }
+
+  /** 배치형 모드 여부 — 진형(formation) 설정 시 연속 스폰 대신 일괄 배치 + 보충 */
+  private get deployMode(): boolean {
+    const f = this.config.formation;
+    return !!f && Object.keys(f).length > 0;
   }
 
   /** 카드 선택권 소비. Lv5 MAX 도달 시 추가 선택권 (설계 07) */
@@ -644,7 +666,8 @@ export class BattleEngine {
       this.timeExpAcc -= 1;
       this.gainExp(1);
     }
-    this.spawnEnemies(dt);
+    if (this.deployMode) this.reinforceFormation(dt); // 배치형: 연속 스폰 X, 보충만
+    else this.spawnEnemies(dt);
     this.spawnAllies(dt);
     this.updateMiniBosses(dt);
     this.updateBossAppearances();
@@ -654,6 +677,7 @@ export class BattleEngine {
     this.updateAuras();
     this.act(dt);
     this.applySeparation();
+    this.clampOutsideTower();
     this.updateProjectiles(dt);
     this.updateTraps();
     this.removeDead();
@@ -928,14 +952,15 @@ export class BattleEngine {
     const base = ENEMY_HEROES.find((h) => h.id === mb.baseHero)!.stats;
     // 다운그레이드 영웅 — 본 보스보다 약함 (설계 10)
     const mult = this.config.statMultiplier * 0.6;
-    const { towerX, towerY, towerRadius } = this.field;
+    const { towerX, towerY } = this.field;
     const angle = Math.random() * Math.PI * 2;
+    const r = this.towerKeepout + 1; // 성 외곽 — keep-out 링 밖에서 등장
     return {
       id: this.nextId++,
       side: 'enemy',
       kind: id,
-      x: towerX + Math.cos(angle) * (towerRadius + 2),
-      y: towerY + Math.sin(angle) * (towerRadius + 2),
+      x: towerX + Math.cos(angle) * r,
+      y: towerY + Math.sin(angle) * r,
       hp: base.hp * mult,
       maxHp: base.hp * mult,
       atk: base.atk * mult,
@@ -988,7 +1013,7 @@ export class BattleEngine {
       side: 'enemy',
       kind: 'paladinBoss',
       x: this.field.towerX,
-      y: this.field.towerY + this.field.towerRadius + 3, // 타워 정면
+      y: this.field.towerY + this.towerKeepout + 2, // 타워 정면 (성 외곽)
       hp,
       maxHp: hp,
       atk: def.stats.atk + def.growthPerStage.atk * offset,
@@ -1027,15 +1052,85 @@ export class BattleEngine {
     this.spawnAcc += this.config.spawnRate * warmup * dt;
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
-      const eUnit = this.pickEnemyUnit();
-      if (this.sideSupply('enemy') + supplyCost(eUnit) > SUPPLY_CAP) continue;
-      const { towerX, towerY, towerRadius, width } = this.field;
+      // 1/n 캡 + 결손 우선 — 화면에 없는/적은 종류부터 채움 (피드백)
+      const eUnit = this.pickSpawnUnit('enemy', this.enemyTypes);
+      if (!eUnit) continue; // 모든 종류가 캡 도달 — 이번 스폰 스킵
+      const { towerX, towerY, width, height } = this.field;
       const angle = Math.random() * Math.PI * 2;
-      const r = towerRadius + 2;
+      // 성 외곽 — keep-out 링 바깥에서 생성 (성벽 UI 위에 솟아나지 않게, 피드백)
+      const r = this.towerKeepout + 1 + Math.random() * 3;
       const x = Math.min(width - 3, Math.max(3, towerX + Math.cos(angle) * r));
-      const y = towerY + Math.sin(angle) * r;
+      const y = Math.min(height - 3, Math.max(3, towerY + Math.sin(angle) * r));
       this.addEntity(this.makeUnit('enemy', eUnit, x, y));
     }
+  }
+
+  /** 배치형: 시작 시 수비 진형을 타워 주변 동심 링에 일괄 배치 (방어 진형) */
+  private deployFormation() {
+    const f = this.config.formation;
+    if (!f) return;
+    const list: UnitId[] = [];
+    for (const [u, n] of Object.entries(f)) {
+      for (let i = 0; i < (n ?? 0); i++) list.push(u as UnitId);
+    }
+    const { towerX, towerY, width, height } = this.field;
+    const baseR = this.towerKeepout + 4;
+    let idx = 0;
+    let ring = 0;
+    while (idx < list.length && ring < 24) {
+      const r = baseR + ring * 7;
+      const cap = Math.max(6, Math.floor((2 * Math.PI * r) / 6)); // 둘레/간격(~6)
+      const cnt = Math.min(cap, list.length - idx);
+      for (let k = 0; k < cnt; k++) {
+        const ang = (k / cnt) * Math.PI * 2 + ring * 0.5;
+        const x = Math.min(width - 3, Math.max(3, towerX + Math.cos(ang) * r));
+        const y = Math.min(height - 3, Math.max(3, towerY + Math.sin(ang) * r));
+        this.addEntity(this.makeUnit('enemy', list[idx++], x, y));
+      }
+      ring++;
+    }
+  }
+
+  /** 배치형 보충: 진형 손실분을 reinforcePctPerMin 속도로 캡(진형 마릿수)까지 외곽에서 충원 */
+  private reinforceFormation(dt: number) {
+    const f = this.config.formation;
+    const pct = this.config.reinforcePctPerMin ?? 0;
+    if (!f || pct <= 0) return;
+    let totalTarget = 0;
+    for (const n of Object.values(f)) totalTarget += n ?? 0;
+    this.reinforceAcc += ((totalTarget * pct) / 100 / 60) * dt;
+    while (this.reinforceAcc >= 1) {
+      // 결손(목표−현재)이 큰 종류부터 보충
+      let bestU: UnitId | null = null;
+      let bestDeficit = 0;
+      for (const [u, target] of Object.entries(f)) {
+        const deficit = (target ?? 0) - this.countType('enemy', u as UnitId);
+        if (deficit > bestDeficit) {
+          bestDeficit = deficit;
+          bestU = u as UnitId;
+        }
+      }
+      if (!bestU) {
+        this.reinforceAcc = Math.min(this.reinforceAcc, 2); // 진형 가득 — 누적 버스트 방지
+        break;
+      }
+      this.reinforceAcc -= 1;
+      const { towerX, towerY, width, height } = this.field;
+      const ang = Math.random() * Math.PI * 2;
+      const r = this.towerKeepout + 2 + Math.random() * 6;
+      const x = Math.min(width - 3, Math.max(3, towerX + Math.cos(ang) * r));
+      const y = Math.min(height - 3, Math.max(3, towerY + Math.sin(ang) * r));
+      this.addEntity(this.makeUnit('enemy', bestU, x, y));
+    }
+  }
+
+  /** 한 측 특정 종류의 생존 수 (배치형 보충 결손 판정용) */
+  private countType(side: Side, unitId: UnitId): number {
+    let n = 0;
+    for (const e of this.entities) {
+      if (e.side === side && e.kind === unitId && e.state !== 'dead') n++;
+    }
+    return n;
   }
 
   private spawnAllies(dt: number) {
@@ -1046,10 +1141,9 @@ export class BattleEngine {
     this.allySpawnAcc += rate * spawnBoost * dt;
     while (this.allySpawnAcc >= 1) {
       this.allySpawnAcc -= 1;
-      // 빈도 배수로 가중 선택 — 원거리/공성/기마 ↓, 근접 ↑ (피드백)
-      const unitId = this.weightedUnitPick(unitCards);
-      // 소모 인구수 캡 (유닛별 supplyCost 합) — 무거운 유닛일수록 적게 운용
-      if (this.sideSupply('ally') + supplyCost(unitId) > SUPPLY_CAP) continue;
+      // 1/n 캡 + 결손 우선 — 검50·방패50·활50·투석10 식 + 빈자리(없는 종류)부터 채움 (피드백)
+      const unitId = this.pickSpawnUnit('ally', unitCards);
+      if (!unitId) continue; // 모든 종류가 캡 도달 — 이번 스폰 스킵
       // 성 포위: 타워 기준 360° 골든 앵글로 화면 가장자리에서 생성 → 사방에서 공성 (피드백 5)
       this.allySpawnAngle = (this.allySpawnAngle + 2.39996323) % (Math.PI * 2);
       const { x, y } = this.edgePointFromTower(this.allySpawnAngle);
@@ -1057,25 +1151,34 @@ export class BattleEngine {
     }
   }
 
-  /** 아군 생성 유닛 가중 선택 (spawnFreq 기준 — 원거리/공성/기마 비중 ↓) */
-  private weightedUnitPick(units: UnitId[]): UnitId {
+  /**
+   * 1/n 인구수 캡 + 결손 우선 스폰 선택 (피드백):
+   * - 각 유닛 종류는 (SUPPLY_CAP / 종류수)만큼만 운용 (고코스트가 저코스트에 밀려 안 나오는 문제 해결).
+   *   예) 검·방패·활·투석 4종이면 각 50 인구수 → 검50·방패50·활50·투석10기.
+   * - 캡 미달 종류 중 **결손(캡 대비 부족분)이 큰 종류를 우선** 뽑는다 → 화면에 없는/적은 유닛부터
+   *   채워져 항상 다양하게 유지(전멸한 종류는 즉시 우선 보충). 딱 목표치 고정 X.
+   * - 영웅·구조물·보스(미니영웅/적영웅)는 인구수에서 제외 (supplyByType).
+   */
+  private pickSpawnUnit(side: Side, types: UnitId[]): UnitId | null {
+    if (types.length === 0) return null;
+    const perTypeCap = SUPPLY_CAP / types.length;
+    const supply = this.supplyByType(side);
     let total = 0;
-    for (const u of units) total += spawnFreq(u);
+    const cands: { u: UnitId; w: number }[] = [];
+    for (const u of types) {
+      const used = supply.get(u) ?? 0;
+      if (used + supplyCost(u) > perTypeCap) continue; // 이 종류 캡 도달
+      const w = Math.max(0.001, perTypeCap - used); // 결손이 클수록(없을수록) 우선
+      cands.push({ u, w });
+      total += w;
+    }
+    if (cands.length === 0) return null;
     let roll = Math.random() * total;
-    for (const u of units) {
-      roll -= spawnFreq(u);
-      if (roll <= 0) return u;
+    for (const c of cands) {
+      roll -= c.w;
+      if (roll <= 0) return c.u;
     }
-    return units[units.length - 1];
-  }
-
-  private pickEnemyUnit(): UnitId {
-    let roll = Math.random() * this.totalWeight;
-    for (const w of this.weights) {
-      roll -= w.weight;
-      if (roll <= 0) return w.unitId;
-    }
-    return this.weights[this.weights.length - 1].unitId;
+    return cands[cands.length - 1].u;
   }
 
   private countSide(side: Side): number {
@@ -1086,15 +1189,19 @@ export class BattleEngine {
     return n;
   }
 
-  /** 한 측의 현재 소모 인구수 합 (유닛만 — 영웅·구조물 제외). 캡 판정용 */
-  private sideSupply(side: Side): number {
-    let sum = 0;
+  /**
+   * 한 측의 유닛 종류별 현재 소모 인구수 합 (kind → supply). 1/n 캡 판정용.
+   * 영웅·구조물·보스(미니영웅/적영웅)는 제외 — 인구수에 포함하지 않음 (피드백).
+   */
+  private supplyByType(side: Side): Map<UnitId, number> {
+    const m = new Map<UnitId, number>();
     for (const e of this.entities) {
       if (e.side !== side || e.state === 'dead') continue;
-      if (e.kind === 'hero' || isStructure(e.kind)) continue;
-      sum += supplyCost(e.kind as UnitId);
+      if (e.kind === 'hero' || isStructure(e.kind) || BOSS_KINDS.has(e.kind)) continue;
+      const k = e.kind as UnitId;
+      m.set(k, (m.get(k) ?? 0) + supplyCost(k));
     }
-    return sum;
+    return m;
   }
 
   /** 적 배회: 타워 주변 [MIN,MAX] 반경의 임의 지점을 순찰, 도달하면 새 지점 (피드백 4) */
@@ -1124,6 +1231,29 @@ export class BattleEngine {
     else if (sin < -1e-6) t = Math.min(t, (m - towerY) / sin);
     if (!isFinite(t)) t = 0;
     return { x: towerX + cos * t, y: towerY + sin * t };
+  }
+
+  /**
+   * 성 UI 침범 방지: 유닛 중심이 keep-out 반경 안에 들어오면 바깥 링으로 밀어낸다.
+   * 아군·적·영웅 공통, 구조물(성벽 등 의도적 배치)·사망 엔티티는 제외. 스폰/분산/이동 후 마지막 보정.
+   */
+  private clampOutsideTower() {
+    const { towerX, towerY } = this.field;
+    const ko = this.towerKeepout;
+    for (const e of this.entities) {
+      if (e.state === 'dead' || isStructure(e.kind)) continue;
+      const dx = e.x - towerX;
+      const dy = e.y - towerY;
+      const d = Math.hypot(dx, dy);
+      if (d >= ko) continue;
+      if (d > 1e-6) {
+        e.x = towerX + (dx / d) * ko;
+        e.y = towerY + (dy / d) * ko;
+      } else {
+        e.x = towerX + ko; // 정확히 중심: 임의 방향으로 밀어냄
+        e.y = towerY;
+      }
+    }
   }
 
   // ── 영웅 부활 ─────────────────────────────────────────
@@ -1279,9 +1409,10 @@ export class BattleEngine {
 
     // 공성 우선: 타워가 사거리(+근접) 내면 누구든 우선 포격 — 포위하고도 타워 못 치는 문제 해결 (피드백).
     // 적 유닛 우선 → 타워 우선으로 전환: 사거리 안에 성이 들어오면 성을 친다(적 반격은 retaliate로 응전).
-    const tDist =
-      Math.hypot(this.field.towerX - e.x, this.field.towerY - e.y) - this.field.towerRadius;
-    if (tDist <= reach) {
+    // keep-out 링을 반영한 공성 사거리. 단, 내 진입로를 막는 성벽이 있으면 성벽부터 (벽 우회 방지)
+    const towerStop = Math.max(this.field.towerRadius + Math.max(e.range, 1), this.towerKeepout);
+    const tCenterDist = Math.hypot(this.field.towerX - e.x, this.field.towerY - e.y);
+    if (tCenterDist <= towerStop + BODY_RADIUS && !this.blockingWall(e)) {
       e.targetId = TOWER_TARGET;
       return;
     }
@@ -1389,7 +1520,8 @@ export class BattleEngine {
 
   private moveAttackTower(e: CombatEntity, dt: number) {
     const { towerX, towerY, towerRadius } = this.field;
-    const stopDist = towerRadius + Math.max(e.range, 1);
+    // 근접 유닛은 성 외곽 keep-out 링에서 공성 — 성벽 UI 위로 올라가지 않게 (피드백)
+    const stopDist = Math.max(towerRadius + Math.max(e.range, 1), this.towerKeepout);
     const inRange = this.moveToward(e, towerX, towerY, stopDist, dt);
     e.state = inRange ? 'attacking' : 'moving';
     if (inRange && e.attackCd <= 0 && e.atkSpeed > 0) {

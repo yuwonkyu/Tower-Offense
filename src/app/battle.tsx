@@ -39,6 +39,7 @@ export default function BattleScreen() {
   const pickChoices = useBattleStore((s) => s.pickChoices);
   const pickTimeLeft = useBattleStore((s) => s.pickTimeLeft);
   const rerollAdUnlocked = useBattleStore((s) => s.rerollAdUnlocked);
+  const rerollUsed = useBattleStore((s) => s.rerollUsed);
   const rewardDoubled = useBattleStore((s) => s.rewardDoubled);
   const resourceGain = useBattleStore((s) => s.resourceGain);
   // 액션 (안정적 참조)
@@ -206,7 +207,12 @@ export default function BattleScreen() {
           running={phase === 'running' && adKind === null && !menuOpen}
           onFrame={handleFrame}
         />
-        <FieldHud stage={config.stage} hard={diff === 'hard'} onSpeedPress={handleSpeedPress} />
+        <FieldHud
+          stage={config.stage}
+          hard={diff === 'hard'}
+          enemyUnits={config.enemyUnits}
+          onSpeedPress={handleSpeedPress}
+        />
       </View>
 
       {/* ── 하단 패널 (영웅/카드/스킬) + EXP 바 ── */}
@@ -223,10 +229,12 @@ export default function BattleScreen() {
           level={useBattleStore.getState().heroLevel}
           onPick={pickCard}
           onReroll={() => {
+            if (rerollUsed) return; // 카드선택 1회당 리롤 1번
             if (adFree || rerollAdUnlocked) useBattleStore.getState().rerollCards();
             else setAdKind('cardReroll');
           }}
           rerollFree={adFree || rerollAdUnlocked}
+          rerollUsed={rerollUsed}
         />
       )}
 

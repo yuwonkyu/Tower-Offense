@@ -311,11 +311,11 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   rerollCards: () => {
     const s = get();
-    // 리롤 무제한 — 광고 1회 시청 시 그 판 전체 무료(rerollAdUnlocked). 무료/광고 분기는 battle.tsx
-    if (s.phase !== 'cardPick' || !s.engine) return;
+    // 리롤은 카드선택 1회당 1번만 (rerollUsed로 게이트). 광고 1회 시청 시 이후 픽마다 무료(rerollAdUnlocked).
+    if (s.phase !== 'cardPick' || !s.engine || s.rerollUsed) return;
     const pickChoices = s.engine.cards.rollChoices(3);
     if (pickChoices.length === 0) return;
-    set({ pickChoices, pickTimeLeft: CARD_PICK_SECONDS });
+    set({ pickChoices, pickTimeLeft: CARD_PICK_SECONDS, rerollUsed: true });
   },
 
   cycleSpeed: () => {

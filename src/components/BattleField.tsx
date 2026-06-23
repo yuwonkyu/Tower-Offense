@@ -18,7 +18,9 @@ import {
   type SkPaint,
 } from '@shopify/react-native-skia';
 import { memo, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Image, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+// 전장 배경 — 인간 종족 필드 (스1~30). 8종족 확장 시 field_<race>.png 추가
+import FIELD_BG from '@/assets/game/field/field_human.png';
 import {
   BattleEngine,
   isStructure,
@@ -192,55 +194,11 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       return p;
     };
 
-    // ── 배경: 베이스 + 세로 그라데이션 밴드 + 타워 메나스 글로우 + 지면 깊이 ──
-    const W = size.w;
-    const H = size.h;
+    // ── 지형/지면은 PNG(field_human.png)가 담당. 성 밑 흙은 추후 "바닥타일 포함 타워 에셋"으로 대체 ──
+    // (절차적 흙/글로우 제거 — 캐주얼 톤 + 중앙 정렬 배경에 맡김. 피드백)
     const tx = towerX * scale;
     const ty = towerY * scale;
     const tr = towerRadius * scale;
-    // 인간 종족 필드 — 풀 + 흙 + 테두리 나무 (Skia 벡터, 에셋 불필요). 유닛 대비 위해 뮤트 톤
-    canvas.drawColor(Skia.Color('#17220f')); // 깊은 풀 베이스
-    canvas.drawRect(Skia.XYWHRect(0, 0, W, H * 0.55), fill('rgba(7,12,5,0.5)')); // 상단 깊이 음영
-    // 풀 텍스처 패치 (고정 의사난수)
-    for (let i = 0; i < 28; i++) {
-      const gx = (((i * 73) % 100) / 100) * W;
-      const gy = (((i * 37 + 11) % 100) / 100) * H;
-      canvas.drawCircle(gx, gy, 8 + (i % 4) * 6, fill(i % 2 ? 'rgba(44,62,28,0.26)' : 'rgba(20,32,12,0.42)'));
-    }
-    // 흙: 타워 주변 전장 지면(밟혀 드러난 흙) + 흙 자국
-    canvas.drawCircle(tx, ty, tr * 4.4, fill('rgba(56,42,26,0.40)'));
-    canvas.drawCircle(tx, ty, tr * 2.6, fill('rgba(70,52,32,0.42)'));
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2 + 0.6;
-      const dd = tr * (3 + (i % 3));
-      canvas.drawCircle(tx + Math.cos(a) * dd, ty + Math.sin(a) * dd, tr * 0.5, fill('rgba(60,46,28,0.32)'));
-    }
-    // 테두리 나무 — 4변을 따라 숲 프레임 (줄기 그림자 + 캐노피 3겹)
-    const treeS = Math.max(10, W * 0.035);
-    const drawTree = (x: number, y: number) => {
-      canvas.drawCircle(x, y + treeS * 1.3, treeS * 0.45, fill('#2a1c10')); // 줄기
-      canvas.drawCircle(x, y, treeS * 1.2, fill('#0f1c0a')); // 캐노피 외곽(짙음)
-      canvas.drawCircle(x - treeS * 0.5, y - treeS * 0.25, treeS * 0.8, fill('#1c3312'));
-      canvas.drawCircle(x + treeS * 0.55, y - treeS * 0.1, treeS * 0.72, fill('#244119'));
-      canvas.drawCircle(x, y - treeS * 0.55, treeS * 0.66, fill('#2c5020'));
-    };
-    const step = treeS * 2.4;
-    for (let x = treeS; x < W; x += step) {
-      drawTree(x, treeS * 0.7); // 상단
-      drawTree(x + step * 0.5, H - treeS * 0.7); // 하단(엇갈림)
-    }
-    for (let y = treeS * 2.6; y < H - treeS * 2; y += step) {
-      drawTree(treeS * 0.7, y); // 좌측
-      drawTree(W - treeS * 0.7, y + step * 0.5); // 우측
-    }
-    // 타워 메나스 글로우 (적 위협감) — 동심원 누적으로 방사형 falloff
-    for (let i = 7; i >= 1; i--) {
-      canvas.drawCircle(tx, ty, tr + i * 10 * scale, fill('rgba(150,40,46,0.05)'));
-    }
-    // 지면 깊이감 — 타워 중심 동심 링
-    for (let i = 1; i <= 3; i++) {
-      canvas.drawCircle(tx, ty, tr + i * 22 * scale, stroke('rgba(255,255,255,0.03)', 1));
-    }
 
     // ── 적 타워: 상단 요새 (4단계 손상 외관) ──
     const dmgStage = towerPct > 0.6 ? 0 : towerPct > 0.3 ? 1 : towerPct > 0 ? 2 : 3;
@@ -367,6 +325,8 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
 
   return (
     <View style={styles.fill} onLayout={onLayout}>
+      {/* 전장 배경 PNG — 비율 cover(중앙 크롭). 투명 Canvas가 위에서 엔티티/성 렌더 */}
+      <Image source={FIELD_BG} style={StyleSheet.absoluteFill} resizeMode="cover" />
       <Canvas style={styles.fill}>
         <Picture picture={picture} />
       </Canvas>
