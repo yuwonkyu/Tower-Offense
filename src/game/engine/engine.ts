@@ -408,11 +408,9 @@ const EXECUTE_BOSS_MULT = 7;
 /** 피격 플래시 지속(초) — 타격감 연출 (렌더 전용) */
 const HIT_FLASH = 0.08;
 const TOWER_FLASH = 0.14;
-/** 타워 발악(피드백): HP 이 비율 이하 시 주기적 광역 넉백 + 적 타격 넉백 — 공성군이 타워만 비비는 것 방지 */
-const TOWER_DESPERATION_PCT = 0.5;
-const DESP_PULSE_INTERVAL = 4; // 광역 넉백 펄스 주기(초)
+/** 타워 발악 넉백(피드백): HP가 이 비율들에 도달할 때 딱 한 번씩(총 3회) 광역 넉백+피해 */
+const TOWER_KNOCKBACK_PCTS = [0.5, 0.3, 0.1];
 const DESP_KNOCKBACK = 18; // 넉백 거리 = 투석기 최대 사거리
-const ENEMY_KNOCKBACK_CHANCE = 0.1; // 발악 중 적 타격 시 아군 넉백 확률
 
 export type EngineResult = 'ongoing' | 'victory';
 
@@ -441,8 +439,8 @@ export class BattleEngine {
   invulnLeft = 0;
   /** 타워 피격 플래시 남은 시간 (초) — 렌더 전용 */
   towerFlash = 0;
-  /** 타워 발악 펄스 쿨다운 (HP 50%↓ 광역 넉백 주기) */
-  private despPulseCd = 0;
+  /** 발동한 발악 넉백 임계 개수 (50%/30%/10% — 각 1회) */
+  private knockbackIdx = 0;
   /** 영웅 스킬 남은 쿨타임 (초) — HUD가 동기화 */
   heroSkillCd = 0;
   /** 투신(스탯 버프) 잔여 시간 */
@@ -526,10 +524,6 @@ export class BattleEngine {
     return !!f && Object.keys(f).length > 0;
   }
 
-  /** 타워 발악 모드 — HP 50% 이하 (광역 넉백 + 적 타격 넉백 발동) */
-  private get towerDesperate(): boolean {
-    return this.towerHp > 0 && this.towerHp <= this.config.tower.hp * TOWER_DESPERATION_PCT;
-  }
 
   /** 카드 선택권 소비. Lv5 MAX 도달 시 추가 선택권 (설계 07) */
   pickCard(cardId: string) {
@@ -685,7 +679,7 @@ export class BattleEngine {
     this.updateRevive(dt);
     this.updateEnemyHero(dt);
     this.updatePendingStrikes(dt);
-    this.updateTowerDesperation(dt);
+    this.updateTowerDesperation();
     this.updateAuras();
     this.act(dt);
     this.applySeparation();
@@ -1278,12 +1272,20 @@ export class BattleEngine {
     e.y = Math.min(height - 3, Math.max(3, e.y + (dy / d) * dist));
   }
 
-  /** 타워 발악(HP 50%↓): 주기적으로 주변 공성 아군을 바깥으로 넉백 + 광역 피해 + 충격파 */
-  private updateTowerDesperation(dt: number) {
-    if (!this.towerDesperate) return;
-    this.despPulseCd -= dt;
-    if (this.despPulseCd > 0) return;
-    this.despPulseCd = DESP_PULSE_INTERVAL;
+  /** 타워 발악 넉백: HP가 50%/30%/10%에 도달할 때마다 1회씩(총 3회) 광역 넉백+피해 (피드백) */
+  private updateTowerDesperation() {
+    while (
+      this.knockbackIdx < TOWER_KNOCKBACK_PCTS.length &&
+      this.towerHp > 0 &&
+      this.towerHp <= this.config.tower.hp * TOWER_KNOCKBACK_PCTS[this.knockbackIdx]
+    ) {
+      this.knockbackIdx++;
+      this.towerKnockbackPulse();
+    }
+  }
+
+  /** 발악 1회: 주변 공성 아군을 바깥으로 넉백 + 광역 피해 + 충격파 링 */
+  private towerKnockbackPulse() {
     const { towerX, towerY } = this.field;
     const radius = this.towerKeepout + 22; // 공성 링 + 여유 — 타워에 붙은 아군 대상
     const dmg = this.enemyHeroAtk; // 적 영웅 공격력 기반 (스테이지 스케일 반영)
@@ -2003,16 +2005,6 @@ export class BattleEngine {
     // 가시(체력 카드 MAX): 피격 시 주변 적 광역 (쿨타임 제한)
     if (target.thorns > 0 && target.thornsCd <= 0 && !isDead(target)) {
       this.thornsPulse(target);
-    }
-    // 타워 발악(50%↓): 적이 아군(영웅 제외) 타격 시 확률로 타워 밖 넉백 — 글루딜 방해 (피드백)
-    if (
-      attacker.side === 'enemy' &&
-      target.kind !== 'hero' &&
-      this.towerDesperate &&
-      !isDead(target) &&
-      Math.random() < ENEMY_KNOCKBACK_CHANCE
-    ) {
-      this.knockbackFromTower(target, DESP_KNOCKBACK);
     }
     if (isDead(target)) {
       // 코인 폭발 / 골드 즉사 (아군이 적 처치 시)
