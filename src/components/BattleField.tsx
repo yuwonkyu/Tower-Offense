@@ -68,13 +68,6 @@ const ENEMY_STROKE = 'rgba(255,70,70,0.95)'; // 적 유닛 빨강 테두리 — 
 /** 피격 순간 번쩍 (타격감) */
 const HIT_COLOR = 'rgba(255,255,255,0.95)';
 
-/**
- * 배경 맵 정렬: 맵의 클리어링(방사형 수렴점)을 타워 위치에 맞춰 그린다(=맵을 크롭/오프셋).
- * BG_FOCUS_Y = 클리어링의 이미지 세로 비율(0~1) — 어긋나면 이 값만 조정(↑=맵 위로/타워가 아래로).
- * BG_ZOOM = cover보다 살짝 확대해 세로 오프셋 여유 확보(클램프로 빈공간 방지).
- */
-const BG_FOCUS_Y = 0.46;
-const BG_ZOOM = 1.12;
 
 /** 영웅 클래스 테마 색 (오라/본체/테두리) — Phase1 절차적 디자인 */
 const HERO_THEME: Record<string, { body: string; aura: string; ring: string }> = {
@@ -205,27 +198,24 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       return p;
     };
 
-    // 타워 화면 좌표 (배경 정렬·성 렌더 공용)
+    // 타워 화면 좌표 (성 렌더용)
     const tx = towerX * scale;
     const ty = towerY * scale;
     const tr = towerRadius * scale;
 
-    // ── 배경 PNG: 맵 클리어링(BG_FOCUS_Y)을 타워(ty)에 맞춰 정렬 = 맵 크롭/오프셋 (피드백) ──
+    // ── 배경 PNG: cover 중앙정렬 — 맵 클리어링을 파일에서 정중앙 크롭해둠 → 중앙정렬 = 타워(중앙) 정렬 ──
     if (bgImage) {
       const W = size.w;
       const H = size.h;
       const iw = bgImage.width();
       const ih = bgImage.height();
-      const s = Math.max(W / iw, H / ih) * BG_ZOOM; // cover + 약간 확대(세로 오프셋 여유)
-      const dw = iw * s;
-      const dh = ih * s;
-      // 가로 중앙, 세로는 클리어링이 타워(ty)에 오도록 — 화면 밖 빈공간 없게 클램프
-      const dx = Math.min(0, Math.max(W - dw, (W - dw) / 2));
-      const dy = Math.min(0, Math.max(H - dh, ty - BG_FOCUS_Y * dh));
+      const cover = Math.max(W / iw, H / ih); // 둘 다 덮는 최대 배율
+      const dw = iw * cover;
+      const dh = ih * cover;
       canvas.drawImageRect(
         bgImage,
         Skia.XYWHRect(0, 0, iw, ih),
-        Skia.XYWHRect(dx, dy, dw, dh),
+        Skia.XYWHRect((W - dw) / 2, (H - dh) / 2, dw, dh), // 중앙 정렬
         fill('rgba(0,0,0,1)'), // 이미지 드로잉용 기본 페인트 (색상 무시됨)
       );
     }
