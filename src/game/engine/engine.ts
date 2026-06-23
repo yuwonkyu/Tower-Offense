@@ -55,9 +55,9 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
     width,
     height,
     towerX: width / 2,
-    // 타워를 화면 정중앙으로 (0.40→0.50) — cover 배경의 중앙 거점과 자동 정렬(모든 기기) +
-    // 사방 360° 포위/공성 대칭. 워3 타워서바이벌식 센터 거점 (피드백)
-    towerY: height * 0.5,
+    // 타워 Y = 배경 맵 클리어링(태양 방사형 수렴점)의 세로 위치(이미지 ~44%)에 맞춤.
+    // cover가 세로를 꽉 채워 이미지비율=화면비율 → 이 값이 곧 화면상 위치. 360° 포위/공성 대칭 (피드백)
+    towerY: height * 0.44,
     towerRadius: 11,
     heroX: width / 2,
     heroY: height * 0.74,

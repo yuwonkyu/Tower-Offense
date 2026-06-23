@@ -14,11 +14,12 @@ import {
   PaintStyle,
   Picture,
   Skia,
+  useImage,
   type SkCanvas,
   type SkPaint,
 } from '@shopify/react-native-skia';
 import { memo, useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 // 전장 배경 — 인간 종족 필드 (스1~30). 8종족 확장 시 field_<race>.png 추가
 import FIELD_BG from '@/assets/game/field/field_human.png';
 import {
@@ -92,6 +93,8 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
   onFrameRef.current = onFrame;
   // 색상별 Paint 캐시 — 프레임 간 재사용 (Skia.Paint 생성 비용 회피)
   const paintCache = useRef<Map<string, SkPaint>>(new Map());
+  // 전장 배경 이미지 (로드 전 null) — cover는 Skia에서 직접 계산해 그린다
+  const bgImage = useImage(FIELD_BG);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -194,8 +197,23 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       return p;
     };
 
-    // ── 지형/지면은 PNG(field_human.png)가 담당. 성 밑 흙은 추후 "바닥타일 포함 타워 에셋"으로 대체 ──
-    // (절차적 흙/글로우 제거 — 캐주얼 톤 + 중앙 정렬 배경에 맡김. 피드백)
+    // ── 배경 PNG: cover(중앙 크롭)를 Skia에서 직접 계산해 그림 (RN Image 스케일 어긋남 회피, 피드백) ──
+    if (bgImage) {
+      const W = size.w;
+      const H = size.h;
+      const iw = bgImage.width();
+      const ih = bgImage.height();
+      const cover = Math.max(W / iw, H / ih); // 둘 다 덮도록 최대 배율
+      const dw = iw * cover;
+      const dh = ih * cover;
+      canvas.drawImageRect(
+        bgImage,
+        Skia.XYWHRect(0, 0, iw, ih),
+        Skia.XYWHRect((W - dw) / 2, (H - dh) / 2, dw, dh), // 중앙 정렬
+        fill('rgba(0,0,0,1)'), // 이미지 드로잉용 기본 페인트 (색상 무시됨)
+      );
+    }
+    // 지형/지면은 PNG가 담당. 성 밑 흙은 추후 "바닥타일 포함 타워 에셋"으로 대체
     const tx = towerX * scale;
     const ty = towerY * scale;
     const tr = towerRadius * scale;
@@ -325,8 +343,6 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
 
   return (
     <View style={styles.fill} onLayout={onLayout}>
-      {/* 전장 배경 PNG — 비율 cover(중앙 크롭). 투명 Canvas가 위에서 엔티티/성 렌더 */}
-      <Image source={FIELD_BG} style={StyleSheet.absoluteFill} resizeMode="cover" />
       <Canvas style={styles.fill}>
         <Picture picture={picture} />
       </Canvas>
