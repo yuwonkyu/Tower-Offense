@@ -1,3 +1,29 @@
+import { CARD_BONUS } from "@/data/cards";
+import {
+  ENEMY_HEROES,
+  MINI_BOSSES,
+  PALADIN_BOSS_EXP,
+} from "@/data/enemyHeroes";
+import { BOMBER_EXPLODED_EXP, NEW_ENEMY_UNITS } from "@/data/enemyUnits";
+import { HEROES } from "@/data/heroes";
+import {
+  spawnWeightsForStage,
+  supplyCost,
+  type SpawnWeight,
+} from "@/data/spawnWeights";
+import {
+  STRUCTURE_SPECS,
+  structureCounts,
+  structureHpScale,
+  TRAP_TRIGGER,
+} from "@/data/structures";
+import { BASE_UNITS } from "@/data/units";
+import {
+  damage,
+  expToNextLevel,
+  expTotalForLevel,
+  HERO_BASE_REGEN_PCT,
+} from "@/game/formulas";
 import type {
   EnemyHeroDef,
   HeroDef,
@@ -7,21 +33,8 @@ import type {
   TargetPriority,
   UnitDef,
   UnitId,
-} from '@/game/types';
-import { BASE_UNITS } from '@/data/units';
-import { CARD_BONUS } from '@/data/cards';
-import { ENEMY_HEROES, MINI_BOSSES, PALADIN_BOSS_EXP } from '@/data/enemyHeroes';
-import { BOMBER_EXPLODED_EXP, NEW_ENEMY_UNITS } from '@/data/enemyUnits';
-import { HEROES } from '@/data/heroes';
-import { STRUCTURE_SPECS, structureCounts, structureHpScale, TRAP_TRIGGER } from '@/data/structures';
-import {
-  damage,
-  expTotalForLevel,
-  expToNextLevel,
-  HERO_BASE_REGEN_PCT,
-} from '@/game/formulas';
-import { spawnWeightsForStage, supplyCost, type SpawnWeight } from '@/data/spawnWeights';
-import { CardSystem, type UnitMods } from './cards';
+} from "@/game/types";
+import { CardSystem, type UnitMods } from "./cards";
 
 /** 전체 유닛 정의 룩업 */
 const UNIT_DEFS = new Map<UnitId, UnitDef>(
@@ -57,7 +70,7 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
     towerX: width / 2,
     // 타워는 **항상 화면 정중앙 고정** — 절대 옮기지 않는다(피드백). 정렬은 맵을 타워에 맞춘다:
     // 배경 PNG의 클리어링(수렴점)을 scripts/centerFieldImage.js로 이미지 정중앙에 크롭 → cover 중앙정렬로 일치.
-    towerY: height * 0.5,
+    towerY: height * 0.46,
     towerRadius: 11,
     heroX: width / 2,
     heroY: height * 0.74,
@@ -65,20 +78,33 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
   };
 }
 
-export type Side = 'ally' | 'enemy';
-export type EntityState = 'moving' | 'attacking' | 'dead';
+export type Side = "ally" | "enemy";
+export type EntityState = "moving" | "attacking" | "dead";
 
 /** 전투 엔티티 종류: 유닛 / 영웅 / 구조물 / 미니보스 / 30스테이지 팔라딘 보스 */
-export type EntityKind = UnitId | 'hero' | StructureKind | MiniBossId | 'paladinBoss';
+export type EntityKind =
+  | UnitId
+  | "hero"
+  | StructureKind
+  | MiniBossId
+  | "paladinBoss";
 
-const STRUCTURE_KINDS: ReadonlySet<string> = new Set(['wall', 'barricade', 'trap']);
+const STRUCTURE_KINDS: ReadonlySet<string> = new Set([
+  "wall",
+  "barricade",
+  "trap",
+]);
 
 export function isStructure(kind: EntityKind): boolean {
   return STRUCTURE_KINDS.has(kind);
 }
 
 /** 보스류 (미니보스/팔라딘) — 일격 즉사 면역 */
-const BOSS_KINDS: ReadonlySet<string> = new Set(['knightMini', 'mageMini', 'paladinBoss']);
+const BOSS_KINDS: ReadonlySet<string> = new Set([
+  "knightMini",
+  "mageMini",
+  "paladinBoss",
+]);
 
 /** 타깃 식별: 양수 = 엔티티 id */
 const NO_TARGET = -1;
@@ -207,7 +233,7 @@ export interface CombatEntity {
 
 /** hurt() 등 호출 후 사망 재확인용 — TS narrowing 우회 */
 function isDead(e: CombatEntity): boolean {
-  return e.state === 'dead';
+  return e.state === "dead";
 }
 
 /** 프록/상태이상 필드 기본값 — 카드 미보유 엔티티용 */
@@ -413,7 +439,7 @@ const TOWER_FLASH = 0.14;
 const TOWER_KNOCKBACK_PCTS = [0.5, 0.3, 0.1];
 const DESP_KNOCKBACK = 18; // 넉백 거리 = 투석기 최대 사거리
 
-export type EngineResult = 'ongoing' | 'victory';
+export type EngineResult = "ongoing" | "victory";
 
 export class BattleEngine {
   entities: CombatEntity[] = [];
@@ -429,7 +455,7 @@ export class BattleEngine {
   totalExp = 0;
   level = 1;
   reviveLeft = 0;
-  result: EngineResult = 'ongoing';
+  result: EngineResult = "ongoing";
   /** 경과 게임 시간 (초) */
   time = 0;
   /** 쌓인 카드 선택권 — 전투 시작 시 헤드스타트 N회 + 레벨업마다 1회 */
@@ -489,17 +515,25 @@ export class BattleEngine {
     this.enemyTypes = this.weights.map((w) => w.unitId);
     this.heroDef = heroDef;
     this.towerHp = config.tower.hp;
-    this.cards = new CardSystem(config.difficulty === 'hard', new Set(unlockedUnits));
+    this.cards = new CardSystem(
+      config.difficulty === "hard",
+      new Set(unlockedUnits),
+    );
     this.hero = this.makeHero();
     this.addEntity(this.hero);
     this.refreshHeroStats(); // 패시브(상시 자기 강화) 즉시 반영
 
     // 적 영웅: 스테이지별 자동 성장 (설계 09) — 스폰 가속은 스테이지 테이블에 이미 반영
-    this.enemyHero = ENEMY_HEROES.find((h) => h.id === config.enemyHero) ?? ENEMY_HEROES[0];
+    this.enemyHero =
+      ENEMY_HEROES.find((h) => h.id === config.enemyHero) ?? ENEMY_HEROES[0];
     const offset = Math.max(0, config.stage - this.enemyHero.stageRange[0]);
-    this.enemyHeroAtk = this.enemyHero.stats.atk + this.enemyHero.growthPerStage.atk * offset;
+    this.enemyHeroAtk =
+      this.enemyHero.stats.atk + this.enemyHero.growthPerStage.atk * offset;
     const baseCd = this.enemyHero.skills[0].cooldown ?? 25;
-    this.enemyHeroSkillCdMax = Math.max(8, baseCd - this.enemyHero.growthPerStage.skillCdr * offset);
+    this.enemyHeroSkillCdMax = Math.max(
+      8,
+      baseCd - this.enemyHero.growthPerStage.skillCdr * offset,
+    );
     this.enemyHeroSkillCd = this.enemyHeroSkillCdMax;
 
     for (const id of config.miniBosses) {
@@ -525,7 +559,6 @@ export class BattleEngine {
     return !!f && Object.keys(f).length > 0;
   }
 
-
   /** 카드 선택권 소비. Lv5 MAX 도달 시 추가 선택권 (설계 07) */
   pickCard(cardId: string) {
     if (this.pendingPicks <= 0) return;
@@ -542,14 +575,18 @@ export class BattleEngine {
    * - 노을 피노을: 적 위치로 이동 + 광역 130% + 공격력 -20% 디버프
    */
   useHeroSkill(): boolean {
-    if (this.heroSkillCd > 0 || this.hero.state === 'dead' || this.result !== 'ongoing') {
+    if (
+      this.heroSkillCd > 0 ||
+      this.hero.state === "dead" ||
+      this.result !== "ongoing"
+    ) {
       return false;
     }
     const skill = this.heroDef.skill;
     // 스킬 강화: 계수 × (1 + 레벨당 2%) — heroes.ts skillBonusPct와 동일 규칙
     const ratio = skill.ratio * (1 + (this.heroSkillLevel - 1) * 0.02);
 
-    if (this.heroDef.id === 'maruhan') {
+    if (this.heroDef.id === "maruhan") {
       // 용맹: 자신 + 주변 아군 전체 스탯 버프 (피드백 7 — 광역 버프형)
       const duration = skill.duration ?? 60;
       const pct = ratio * 100;
@@ -557,14 +594,19 @@ export class BattleEngine {
       this.heroSkillBuffLeft = duration;
       this.refreshHeroStats();
       this.applyValorBuff(pct, duration);
-      this.spawnEffect(this.hero.x, this.hero.y, VALOR_RADIUS, 'rgba(255,210,90,0.9)'); // 용맹 = 황금 버프링
+      this.spawnEffect(
+        this.hero.x,
+        this.hero.y,
+        VALOR_RADIUS,
+        "rgba(255,210,90,0.9)",
+      ); // 용맹 = 황금 버프링
     } else {
       // 타깃 지점: 영웅 주변 가장 가까운 적 (없으면 발동 보류)
       const h = this.hero;
       let target: CombatEntity | null = null;
       let best = Infinity;
       for (const c of this.entities) {
-        if (c.side !== 'enemy' || c.state === 'dead') continue;
+        if (c.side !== "enemy" || c.state === "dead") continue;
         const d = Math.hypot(c.x - h.x, c.y - h.y);
         if (d < best && d <= HERO_AGGRO * 1.5) {
           best = d;
@@ -573,7 +615,7 @@ export class BattleEngine {
       }
       if (!target) return false;
 
-      const isNoeul = this.heroDef.id === 'noeul';
+      const isNoeul = this.heroDef.id === "noeul";
       if (isNoeul) {
         // 피노을: 지정 위치로 도약 — 출발→도착 경로 잔상 연출
         this.spawnLeapTrail(h.x, h.y, target.x, target.y);
@@ -582,11 +624,16 @@ export class BattleEngine {
       }
       const radius = isNoeul ? 4 : 6; // 살소나기는 더 넓은 화살비
       // 발동 위치 링: 노을=보라(도약/암살), 미르=하늘색(화살비)
-      this.spawnEffect(target.x, target.y, radius, isNoeul ? 'rgba(200,90,230,0.95)' : 'rgba(150,210,255,0.95)');
+      this.spawnEffect(
+        target.x,
+        target.y,
+        radius,
+        isNoeul ? "rgba(200,90,230,0.95)" : "rgba(150,210,255,0.95)",
+      );
       if (!isNoeul) this.spawnArrowRain(target.x, target.y, radius); // 살소나기 화살비
       const atk = h.atk * ratio;
       for (const c of this.entities) {
-        if (c.side !== 'enemy' || c.state === 'dead') continue;
+        if (c.side !== "enemy" || c.state === "dead") continue;
         if (Math.hypot(c.x - target.x, c.y - target.y) > radius) continue;
         this.hurt(c, damage(atk, c.def));
         if (isDead(c)) continue;
@@ -601,7 +648,8 @@ export class BattleEngine {
   /** 용맹: 아군 유닛 전군(영웅 제외 — 영웅은 heroBuffPct로 처리)에 스탯 % 버프 (피드백 — 반경 제한 없이 전체 적용) */
   private applyValorBuff(pct: number, duration: number) {
     for (const e of this.entities) {
-      if (e.side !== 'ally' || e.kind === 'hero' || e.state === 'dead') continue;
+      if (e.side !== "ally" || e.kind === "hero" || e.state === "dead")
+        continue;
       if (isStructure(e.kind)) continue;
       if (e.buffLeft > 0) this.removeValorBuff(e); // 재시전 — 기존 버프 갱신
       const f = 1 + pct / 100;
@@ -642,21 +690,22 @@ export class BattleEngine {
     for (const e of this.entities) {
       if (e.auraShield > 0) e.auraShield = 0; // 이전 틱 값 초기화
       // 방패병 Lv5(아군 카드) + 치유사 내재 오라(아군·적 공통)
-      if (e.state !== 'dead' && e.auraValue > 0) providers.push(e);
+      if (e.state !== "dead" && e.auraValue > 0) providers.push(e);
     }
     if (providers.length === 0) return;
     for (const e of this.entities) {
-      if (e.state === 'dead' || isStructure(e.kind)) continue;
+      if (e.state === "dead" || isStructure(e.kind)) continue;
       for (const p of providers) {
         if (p.side !== e.side || p.auraValue <= e.auraShield) continue; // 같은 편만, 제공자 중 최대
-        if (Math.hypot(e.x - p.x, e.y - p.y) <= SHIELD_AURA_RADIUS) e.auraShield = p.auraValue;
+        if (Math.hypot(e.x - p.x, e.y - p.y) <= SHIELD_AURA_RADIUS)
+          e.auraShield = p.auraValue;
       }
     }
   }
 
   /** dt = 게임 시간 기준 경과 초 (배속 적용 후) */
   tick(dt: number) {
-    if (this.result !== 'ongoing') return;
+    if (this.result !== "ongoing") return;
     this.time += dt;
     this.heroSkillCd = Math.max(0, this.heroSkillCd - dt);
     if (this.heroSkillBuffLeft > 0) {
@@ -672,7 +721,8 @@ export class BattleEngine {
       this.timeExpAcc -= 1;
       this.gainExp(1);
     }
-    if (this.deployMode) this.reinforceFormation(dt); // 배치형: 연속 스폰 X, 보충만
+    if (this.deployMode)
+      this.reinforceFormation(dt); // 배치형: 연속 스폰 X, 보충만
     else this.spawnEnemies(dt);
     this.spawnAllies(dt);
     this.updateMiniBosses(dt);
@@ -709,7 +759,10 @@ export class BattleEngine {
 
   /** 활/마법 즉시타격 시 발사 위치→타깃으로 짧은 시각 트레이서 (피드백 3) */
   private spawnTracer(attacker: CombatEntity, tx: number, ty: number) {
-    const color = attacker.kind === 'archer' ? 'rgba(225,235,255,0.95)' : 'rgba(190,130,245,0.95)';
+    const color =
+      attacker.kind === "archer"
+        ? "rgba(225,235,255,0.95)"
+        : "rgba(190,130,245,0.95)";
     this.tracers.push({
       id: this.nextId++,
       fromX: attacker.x,
@@ -723,37 +776,76 @@ export class BattleEngine {
   }
 
   /** 스킬/광역 발동 위치에 퍼지는 링 이펙트 추가 */
-  private spawnEffect(x: number, y: number, maxRadius: number, color: string, life = 0.55) {
-    this.effects.push({ id: this.nextId++, x, y, maxRadius, life, maxLife: life, color });
+  private spawnEffect(
+    x: number,
+    y: number,
+    maxRadius: number,
+    color: string,
+    life = 0.55,
+  ) {
+    this.effects.push({
+      id: this.nextId++,
+      x,
+      y,
+      maxRadius,
+      life,
+      maxLife: life,
+      color,
+    });
   }
 
   /** 피노을 도약 잔상: 출발→도착 경로에 작은 링 잔상 (도약 시각화) */
   private spawnLeapTrail(x1: number, y1: number, x2: number, y2: number) {
-    const color = 'rgba(200,90,230,0.8)';
+    const color = "rgba(200,90,230,0.8)";
     this.spawnEffect(x1, y1, 4, color, 0.4); // 출발 지점 잔상
     const steps = 5;
     for (let i = 1; i <= steps; i++) {
       const t = i / (steps + 1);
-      this.spawnEffect(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, 1.6, color, 0.18 + t * 0.2);
+      this.spawnEffect(
+        x1 + (x2 - x1) * t,
+        y1 + (y2 - y1) * t,
+        1.6,
+        color,
+        0.18 + t * 0.2,
+      );
     }
   }
 
   /** 살소나기 화살비: 범위 내 흩뿌리는 작은 낙하 링 (화살비 시각화) */
   private spawnArrowRain(cx: number, cy: number, radius: number) {
-    const color = 'rgba(150,210,255,0.9)';
+    const color = "rgba(150,210,255,0.9)";
     for (let i = 0; i < 8; i++) {
       const ang = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * radius; // 균일 분포
-      this.spawnEffect(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 1.3, color, 0.3 + Math.random() * 0.3);
+      this.spawnEffect(
+        cx + Math.cos(ang) * r,
+        cy + Math.sin(ang) * r,
+        1.3,
+        color,
+        0.3 + Math.random() * 0.3,
+      );
     }
   }
 
   /** 적 영웅 스킬 예약: 경고 텔레그래프 후 delay 경과 시 광역 피해 (위협 가독성) */
-  private queueStrike(x: number, y: number, radius: number, dmg: number, delay: number, color: string) {
+  private queueStrike(
+    x: number,
+    y: number,
+    radius: number,
+    dmg: number,
+    delay: number,
+    color: string,
+  ) {
     // 경고 링: delay 동안 고정 반경으로 점점 진해지는 위험 표시
     this.effects.push({
-      id: this.nextId++, x, y, maxRadius: radius, life: delay, maxLife: delay,
-      color: 'rgba(255,70,50,0.85)', warning: true,
+      id: this.nextId++,
+      x,
+      y,
+      maxRadius: radius,
+      life: delay,
+      maxLife: delay,
+      color: "rgba(255,70,50,0.85)",
+      warning: true,
     });
     this.pendingStrikes.push({ delay, x, y, radius, dmg, color });
   }
@@ -776,8 +868,8 @@ export class BattleEngine {
     const s = this.heroDef.stats;
     return {
       id: this.nextId++,
-      side: 'ally',
-      kind: 'hero',
+      side: "ally",
+      kind: "hero",
       x: this.field.heroX,
       y: this.field.heroY,
       hp: s.hp,
@@ -788,7 +880,7 @@ export class BattleEngine {
       atkSpeed: s.atkSpeed,
       moveSpeed: s.moveSpeed,
       aoe: s.aoe,
-      priority: 'nearest',
+      priority: "nearest",
       evade: 0,
       killExp: 0,
       critChance: 0,
@@ -801,16 +893,23 @@ export class BattleEngine {
       attackCd: 0,
       retargetCd: 0,
       targetId: NO_TARGET,
-      state: 'moving',
+      state: "moving",
       ...zeroProcFields(),
     };
   }
 
-  private makeUnit(side: Side, unitId: UnitId, x: number, y: number): CombatEntity {
+  private makeUnit(
+    side: Side,
+    unitId: UnitId,
+    x: number,
+    y: number,
+  ): CombatEntity {
     const def = unitDef(unitId);
-    const metaBonus = side === 'ally' ? (this.unitMetaBonus.get(unitId) ?? 0) : 0;
-    const mult = (side === 'enemy' ? this.config.statMultiplier : 1) * (1 + metaBonus);
-    const m = side === 'ally' ? this.cards.unitMods(unitId) : null;
+    const metaBonus =
+      side === "ally" ? (this.unitMetaBonus.get(unitId) ?? 0) : 0;
+    const mult =
+      (side === "enemy" ? this.config.statMultiplier : 1) * (1 + metaBonus);
+    const m = side === "ally" ? this.cards.unitMods(unitId) : null;
     const f = (pct: number | undefined) => 1 + (pct ?? 0) / 100;
     return {
       id: this.nextId++,
@@ -827,7 +926,7 @@ export class BattleEngine {
       moveSpeed: def.stats.moveSpeed * f(m?.moveSpeedPct),
       aoe: def.stats.aoe * f(m?.aoePct) + (m?.bonusAoe ?? 0), // bonusAoe: 공격력 카드 Lv5 광역공격
       priority: def.priority,
-      evade: (unitId === 'assassin' ? 0.3 : 0) + (m?.evadePct ?? 0) / 100,
+      evade: (unitId === "assassin" ? 0.3 : 0) + (m?.evadePct ?? 0) / 100,
       killExp: def.exp,
       critChance: (m?.critChance ?? 0) / 100,
       lifestealPct: (m?.lifestealPct ?? 0) / 100,
@@ -837,10 +936,13 @@ export class BattleEngine {
       stunLeft: 0,
       projectileSpeed: def.projectileSpeed ?? 0,
       // 투석기: 배치 직후 준비시간 후 첫 발사 (피드백 8)
-      attackCd: unitId === 'catapult' ? CATAPULT_WIND_UP + Math.random() : Math.random() * 0.5,
+      attackCd:
+        unitId === "catapult"
+          ? CATAPULT_WIND_UP + Math.random()
+          : Math.random() * 0.5,
       retargetCd: Math.random() * 0.2,
       targetId: NO_TARGET,
-      state: 'moving',
+      state: "moving",
       ...zeroProcFields(),
       // 프록 카드 보정 (아군 전용)
       dmgReduction: (m?.dmgReductionPct ?? 0) / 100,
@@ -856,7 +958,9 @@ export class BattleEngine {
       stunOnHit: m?.stunSec ?? 0,
       undyingCdMax: m?.undyingCooldownSec ?? 0,
       // 치유사: 내재 수호 오라(받는 피해 감소) — 아군·적 공통, 카드 보정과 합산
-      auraValue: (unitId === 'healer' ? HEALER_AURA_DR : 0) + (m?.auraDmgReductionPct ?? 0) / 100,
+      auraValue:
+        (unitId === "healer" ? HEALER_AURA_DR : 0) +
+        (m?.auraDmgReductionPct ?? 0) / 100,
       multishot: m?.multishot ?? 0,
       doubleStrikeChance: (m?.doubleStrikeChance ?? 0) / 100,
       healBonus: (m?.healBonusPct ?? 0) / 100,
@@ -871,27 +975,38 @@ export class BattleEngine {
       noHeal: !!def.mechanical,
       // 직업 역할 특성 오버라이드 (zeroProcFields 기본값 1/0 위에 덮어씀)
       rangedDmgReduction:
-        unitId === 'shield' ? 0.4 :
-        unitId === 'swordsman' ? 0.3 : 0,
+        unitId === "shield" ? 0.4 : unitId === "swordsman" ? 0.3 : 0,
       siegeDmgMult:
-        unitId === 'mageLow' || unitId === 'mageMid' || unitId === 'mageHigh' ? 0.4 :
-        unitId === 'assassin' ? 0.3 : 1,
+        unitId === "mageLow" || unitId === "mageMid" || unitId === "mageHigh"
+          ? 0.4
+          : unitId === "assassin"
+            ? 0.3
+            : 1,
       vsUnitMult:
-        unitId === 'assassin' ? 1.6 :
-        unitId === 'mageLow' || unitId === 'mageMid' || unitId === 'mageHigh' ? 1.3 : 1,
-      vsRangedUnitMult: unitId === 'cavalry' ? 1.5 : 1,
-      evadeVsRanged: unitId === 'assassin' ? 0.3 : 0,
+        unitId === "assassin"
+          ? 1.6
+          : unitId === "mageLow" ||
+              unitId === "mageMid" ||
+              unitId === "mageHigh"
+            ? 1.3
+            : 1,
+      vsRangedUnitMult: unitId === "cavalry" ? 1.5 : 1,
+      evadeVsRanged: unitId === "assassin" ? 0.3 : 0,
     };
   }
 
   // ── 구조물 / 미니보스 / 보스 (설계 09, 11) ───────────────
 
-  private makeStructure(kind: StructureKind, x: number, y: number): CombatEntity {
+  private makeStructure(
+    kind: StructureKind,
+    x: number,
+    y: number,
+  ): CombatEntity {
     const spec = STRUCTURE_SPECS[kind];
     const hp = spec.hp * structureHpScale(this.config.stage);
     return {
       id: this.nextId++,
-      side: 'enemy',
+      side: "enemy",
       kind,
       x,
       y,
@@ -903,7 +1018,7 @@ export class BattleEngine {
       atkSpeed: 0,
       moveSpeed: 0,
       aoe: 1,
-      priority: 'nearest',
+      priority: "nearest",
       evade: 0,
       killExp: spec.exp,
       critChance: 0,
@@ -915,7 +1030,7 @@ export class BattleEngine {
       attackCd: 0,
       retargetCd: 0,
       targetId: NO_TARGET,
-      state: 'moving',
+      state: "moving",
       ...zeroProcFields(),
     };
   }
@@ -929,7 +1044,11 @@ export class BattleEngine {
       const angle = Math.PI / 2 + (i * 2 * Math.PI) / walls;
       const r = towerRadius + 5;
       this.addEntity(
-        this.makeStructure('wall', towerX + Math.cos(angle) * r, towerY + Math.sin(angle) * r),
+        this.makeStructure(
+          "wall",
+          towerX + Math.cos(angle) * r,
+          towerY + Math.sin(angle) * r,
+        ),
       );
     }
 
@@ -940,8 +1059,11 @@ export class BattleEngine {
       const angle = Math.random() * Math.PI * 2;
       const r = baMinR + Math.random() * Math.max(8, baMaxR - baMinR);
       const x = Math.max(8, Math.min(width - 8, towerX + Math.cos(angle) * r));
-      const y = Math.max(8, Math.min(this.field.height - 8, towerY + Math.sin(angle) * r));
-      this.addEntity(this.makeStructure('barricade', x, y));
+      const y = Math.max(
+        8,
+        Math.min(this.field.height - 8, towerY + Math.sin(angle) * r),
+      );
+      this.addEntity(this.makeStructure("barricade", x, y));
     }
 
     // 트랩: 타워 반경 내 랜덤 링
@@ -949,7 +1071,11 @@ export class BattleEngine {
       const angle = Math.random() * Math.PI * 2;
       const r = towerRadius + 6 + Math.random() * 12;
       this.addEntity(
-        this.makeStructure('trap', towerX + Math.cos(angle) * r, towerY + Math.sin(angle) * r),
+        this.makeStructure(
+          "trap",
+          towerX + Math.cos(angle) * r,
+          towerY + Math.sin(angle) * r,
+        ),
       );
     }
   }
@@ -964,7 +1090,7 @@ export class BattleEngine {
     const r = this.towerKeepout + 1; // 성 외곽 — keep-out 링 밖에서 등장
     return {
       id: this.nextId++,
-      side: 'enemy',
+      side: "enemy",
       kind: id,
       x: towerX + Math.cos(angle) * r,
       y: towerY + Math.sin(angle) * r,
@@ -976,7 +1102,7 @@ export class BattleEngine {
       atkSpeed: base.atkSpeed,
       moveSpeed: 4,
       aoe: base.aoe,
-      priority: 'nearest',
+      priority: "nearest",
       evade: 0,
       killExp: mb.exp,
       critChance: 0,
@@ -988,7 +1114,7 @@ export class BattleEngine {
       attackCd: 0,
       retargetCd: 0,
       targetId: NO_TARGET,
-      state: 'moving',
+      state: "moving",
       ...zeroProcFields(),
     };
   }
@@ -1012,13 +1138,13 @@ export class BattleEngine {
     if (this.time < times[this.bossAppearIdx]) return;
     this.bossAppearIdx++;
 
-    const def = ENEMY_HEROES.find((h) => h.id === 'paladin')!;
+    const def = ENEMY_HEROES.find((h) => h.id === "paladin")!;
     const offset = Math.max(0, this.config.stage - def.stageRange[0]);
     const hp = def.stats.hp + def.growthPerStage.hp * offset;
     this.addEntity({
       id: this.nextId++,
-      side: 'enemy',
-      kind: 'paladinBoss',
+      side: "enemy",
+      kind: "paladinBoss",
       x: this.field.towerX,
       y: this.field.towerY + this.towerKeepout + 2, // 타워 정면 (성 외곽)
       hp,
@@ -1029,7 +1155,7 @@ export class BattleEngine {
       atkSpeed: def.stats.atkSpeed,
       moveSpeed: 4,
       aoe: def.stats.aoe,
-      priority: 'nearest',
+      priority: "nearest",
       evade: 0,
       killExp: PALADIN_BOSS_EXP,
       critChance: 0,
@@ -1041,7 +1167,7 @@ export class BattleEngine {
       attackCd: 0,
       retargetCd: 0,
       targetId: NO_TARGET,
-      state: 'moving',
+      state: "moving",
       ...zeroProcFields(),
     });
   }
@@ -1054,13 +1180,15 @@ export class BattleEngine {
   private spawnEnemies(dt: number) {
     const warmup = Math.min(
       1,
-      ENEMY_SPAWN_WARMUP_START + (1 - ENEMY_SPAWN_WARMUP_START) * (this.time / ENEMY_SPAWN_WARMUP_SECONDS),
+      ENEMY_SPAWN_WARMUP_START +
+        (1 - ENEMY_SPAWN_WARMUP_START) *
+          (this.time / ENEMY_SPAWN_WARMUP_SECONDS),
     );
     this.spawnAcc += this.config.spawnRate * warmup * dt;
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
       // 1/n 캡 + 결손 우선 — 화면에 없는/적은 종류부터 채움 (피드백)
-      const eUnit = this.pickSpawnUnit('enemy', this.enemyTypes);
+      const eUnit = this.pickSpawnUnit("enemy", this.enemyTypes);
       if (!eUnit) continue; // 모든 종류가 캡 도달 — 이번 스폰 스킵
       const { towerX, towerY, width, height } = this.field;
       const angle = Math.random() * Math.PI * 2;
@@ -1068,7 +1196,7 @@ export class BattleEngine {
       const r = this.towerKeepout + 1 + Math.random() * 3;
       const x = Math.min(width - 3, Math.max(3, towerX + Math.cos(angle) * r));
       const y = Math.min(height - 3, Math.max(3, towerY + Math.sin(angle) * r));
-      this.addEntity(this.makeUnit('enemy', eUnit, x, y));
+      this.addEntity(this.makeUnit("enemy", eUnit, x, y));
     }
   }
 
@@ -1092,7 +1220,7 @@ export class BattleEngine {
         const ang = (k / cnt) * Math.PI * 2 + ring * 0.5;
         const x = Math.min(width - 3, Math.max(3, towerX + Math.cos(ang) * r));
         const y = Math.min(height - 3, Math.max(3, towerY + Math.sin(ang) * r));
-        this.addEntity(this.makeUnit('enemy', list[idx++], x, y));
+        this.addEntity(this.makeUnit("enemy", list[idx++], x, y));
       }
       ring++;
     }
@@ -1111,7 +1239,7 @@ export class BattleEngine {
       let bestU: UnitId | null = null;
       let bestDeficit = 0;
       for (const [u, target] of Object.entries(f)) {
-        const deficit = (target ?? 0) - this.countType('enemy', u as UnitId);
+        const deficit = (target ?? 0) - this.countType("enemy", u as UnitId);
         if (deficit > bestDeficit) {
           bestDeficit = deficit;
           bestU = u as UnitId;
@@ -1127,7 +1255,7 @@ export class BattleEngine {
       const r = this.towerKeepout + 2 + Math.random() * 6;
       const x = Math.min(width - 3, Math.max(3, towerX + Math.cos(ang) * r));
       const y = Math.min(height - 3, Math.max(3, towerY + Math.sin(ang) * r));
-      this.addEntity(this.makeUnit('enemy', bestU, x, y));
+      this.addEntity(this.makeUnit("enemy", bestU, x, y));
     }
   }
 
@@ -1135,7 +1263,7 @@ export class BattleEngine {
   private countType(side: Side, unitId: UnitId): number {
     let n = 0;
     for (const e of this.entities) {
-      if (e.side === side && e.kind === unitId && e.state !== 'dead') n++;
+      if (e.side === side && e.kind === unitId && e.state !== "dead") n++;
     }
     return n;
   }
@@ -1149,12 +1277,12 @@ export class BattleEngine {
     while (this.allySpawnAcc >= 1) {
       this.allySpawnAcc -= 1;
       // 1/n 캡 + 결손 우선 — 검50·방패50·활50·투석10 식 + 빈자리(없는 종류)부터 채움 (피드백)
-      const unitId = this.pickSpawnUnit('ally', unitCards);
+      const unitId = this.pickSpawnUnit("ally", unitCards);
       if (!unitId) continue; // 모든 종류가 캡 도달 — 이번 스폰 스킵
       // 성 포위: 타워 기준 360° 골든 앵글로 화면 가장자리에서 생성 → 사방에서 공성 (피드백 5)
       this.allySpawnAngle = (this.allySpawnAngle + 2.39996323) % (Math.PI * 2);
       const { x, y } = this.edgePointFromTower(this.allySpawnAngle);
-      this.addEntity(this.makeUnit('ally', unitId, x, y));
+      this.addEntity(this.makeUnit("ally", unitId, x, y));
     }
   }
 
@@ -1191,7 +1319,7 @@ export class BattleEngine {
   private countSide(side: Side): number {
     let n = 0;
     for (const e of this.entities) {
-      if (e.side === side && e.state !== 'dead' && !isStructure(e.kind)) n++;
+      if (e.side === side && e.state !== "dead" && !isStructure(e.kind)) n++;
     }
     return n;
   }
@@ -1203,8 +1331,9 @@ export class BattleEngine {
   private supplyByType(side: Side): Map<UnitId, number> {
     const m = new Map<UnitId, number>();
     for (const e of this.entities) {
-      if (e.side !== side || e.state === 'dead') continue;
-      if (e.kind === 'hero' || isStructure(e.kind) || BOSS_KINDS.has(e.kind)) continue;
+      if (e.side !== side || e.state === "dead") continue;
+      if (e.kind === "hero" || isStructure(e.kind) || BOSS_KINDS.has(e.kind))
+        continue;
       const k = e.kind as UnitId;
       m.set(k, (m.get(k) ?? 0) + supplyCost(k));
     }
@@ -1215,12 +1344,17 @@ export class BattleEngine {
   private roamAroundTower(e: CombatEntity, dt: number) {
     const { towerX, towerY, width, height } = this.field;
     const reached =
-      e.roamX === undefined || Math.hypot(e.x - e.roamX, e.y - (e.roamY ?? e.y)) < 3;
+      e.roamX === undefined ||
+      Math.hypot(e.x - e.roamX, e.y - (e.roamY ?? e.y)) < 3;
     if (reached) {
       const ang = Math.random() * Math.PI * 2;
-      const dist = ENEMY_ROAM_MIN + Math.random() * (ENEMY_ROAM_MAX - ENEMY_ROAM_MIN);
+      const dist =
+        ENEMY_ROAM_MIN + Math.random() * (ENEMY_ROAM_MAX - ENEMY_ROAM_MIN);
       e.roamX = Math.min(width - 3, Math.max(3, towerX + Math.cos(ang) * dist));
-      e.roamY = Math.min(height - 3, Math.max(3, towerY + Math.sin(ang) * dist));
+      e.roamY = Math.min(
+        height - 3,
+        Math.max(3, towerY + Math.sin(ang) * dist),
+      );
     }
     this.moveToward(e, e.roamX!, e.roamY!, 0, dt);
   }
@@ -1248,7 +1382,7 @@ export class BattleEngine {
     const { towerX, towerY } = this.field;
     const ko = this.towerKeepout;
     for (const e of this.entities) {
-      if (e.state === 'dead' || isStructure(e.kind)) continue;
+      if (e.state === "dead" || isStructure(e.kind)) continue;
       const dx = e.x - towerX;
       const dy = e.y - towerY;
       const d = Math.hypot(dx, dy);
@@ -1278,7 +1412,8 @@ export class BattleEngine {
     while (
       this.knockbackIdx < TOWER_KNOCKBACK_PCTS.length &&
       this.towerHp > 0 &&
-      this.towerHp <= this.config.tower.hp * TOWER_KNOCKBACK_PCTS[this.knockbackIdx]
+      this.towerHp <=
+        this.config.tower.hp * TOWER_KNOCKBACK_PCTS[this.knockbackIdx]
     ) {
       this.knockbackIdx++;
       this.towerKnockbackPulse();
@@ -1291,24 +1426,25 @@ export class BattleEngine {
     const radius = this.towerKeepout + 22; // 공성 링 + 여유 — 타워에 붙은 아군 대상
     const dmg = this.enemyHeroAtk; // 적 영웅 공격력 기반 (스테이지 스케일 반영)
     for (const e of this.entities) {
-      if (e.side !== 'ally' || e.state === 'dead' || isStructure(e.kind)) continue;
+      if (e.side !== "ally" || e.state === "dead" || isStructure(e.kind))
+        continue;
       if (Math.hypot(e.x - towerX, e.y - towerY) > radius) continue;
       this.knockbackFromTower(e, DESP_KNOCKBACK);
       this.hurt(e, damage(dmg, e.def));
     }
-    this.spawnEffect(towerX, towerY, radius, 'rgba(255,90,60,0.9)'); // 발악 충격파 링
+    this.spawnEffect(towerX, towerY, radius, "rgba(255,90,60,0.9)"); // 발악 충격파 링
   }
 
   // ── 영웅 부활 ─────────────────────────────────────────
 
   private updateRevive(dt: number) {
-    if (this.hero.state !== 'dead') return;
+    if (this.hero.state !== "dead") return;
     this.reviveLeft = Math.max(0, this.reviveLeft - dt);
     if (this.reviveLeft <= 0) {
       this.hero.hp = this.hero.maxHp;
       this.hero.x = this.field.heroX;
       this.hero.y = this.field.heroY;
-      this.hero.state = 'moving';
+      this.hero.state = "moving";
       this.hero.targetId = NO_TARGET;
     }
   }
@@ -1317,9 +1453,11 @@ export class BattleEngine {
 
   private act(dt: number) {
     // 랠리 판정: 아군 유닛 수 (영웅 제외)
-    this.allyWaveReady = this.countSide('ally') - (this.hero.state !== 'dead' ? 1 : 0) >= ALLY_RALLY_SIZE;
+    this.allyWaveReady =
+      this.countSide("ally") - (this.hero.state !== "dead" ? 1 : 0) >=
+      ALLY_RALLY_SIZE;
     for (const e of this.entities) {
-      if (e.state === 'dead') continue;
+      if (e.state === "dead") continue;
       e.age += dt; // 생성 후 경과 — 분산 grace 판정용
       if (e.hitFlash > 0) e.hitFlash -= dt; // 피격 플래시 감쇠 (구조물 포함)
       if (isStructure(e.kind)) continue; // 구조물은 행동 없음 (트랩은 updateTraps)
@@ -1350,14 +1488,17 @@ export class BattleEngine {
       e.attackCd = Math.max(0, e.attackCd - dt);
       e.retargetCd -= dt;
       if (e.regenPctPerSec > 0 && e.hp < e.maxHp && !e.noHeal) {
-        e.hp = Math.min(e.maxHp, e.hp + (e.maxHp * e.regenPctPerSec * dt) / 100);
+        e.hp = Math.min(
+          e.maxHp,
+          e.hp + (e.maxHp * e.regenPctPerSec * dt) / 100,
+        );
       }
 
-      if (e.priority === 'healAlly') {
+      if (e.priority === "healAlly") {
         this.actHealer(e, dt);
         continue;
       }
-      if (e.kind === 'bomber') {
+      if (e.kind === "bomber") {
         this.actBomber(e, dt);
         continue;
       }
@@ -1373,8 +1514,8 @@ export class BattleEngine {
         const target = this.byId.get(e.targetId);
         if (target) this.moveAttackEntity(e, target, dt);
       } else {
-        e.state = 'moving';
-        if (e.side === 'enemy') {
+        e.state = "moving";
+        if (e.side === "enemy") {
           // 방어 태세 배회: 추격 대상 없으면 타워 주변을 순찰 (성에만 붙지 않게 — 피드백 4)
           this.roamAroundTower(e, dt);
         }
@@ -1386,29 +1527,31 @@ export class BattleEngine {
     if (e.targetId === TOWER_TARGET) return true;
     if (e.targetId === NO_TARGET) return false;
     const t = this.byId.get(e.targetId);
-    return !!t && t.state !== 'dead';
+    return !!t && t.state !== "dead";
   }
 
   /** 우선타깃 시스템 (설계 14) */
   private acquireTarget(e: CombatEntity) {
-    if (e.side === 'ally' && e.kind !== 'hero') {
+    if (e.side === "ally" && e.kind !== "hero") {
       this.acquireAllyTarget(e);
       return;
     }
 
     const aggro =
-      e.kind === 'hero' ? Math.max(e.range + AGGRO_BONUS, HERO_AGGRO) : e.range + AGGRO_BONUS;
+      e.kind === "hero"
+        ? Math.max(e.range + AGGRO_BONUS, HERO_AGGRO)
+        : e.range + AGGRO_BONUS;
     let best: CombatEntity | null = null;
     let bestScore = Infinity;
 
     for (const c of this.entities) {
-      if (c.side === e.side || c.state === 'dead') continue;
+      if (c.side === e.side || c.state === "dead") continue;
       const dist = Math.hypot(c.x - e.x, c.y - e.y);
       if (dist > aggro) continue;
 
       let score = dist;
-      if (e.priority === 'tank') score -= c.def * 0.5; // 방어력 높은 탱커 우선
-      if (e.priority === 'ranged' && c.range >= RANGED_THRESHOLD) score -= 30; // 원거리 우선
+      if (e.priority === "tank") score -= c.def * 0.5; // 방어력 높은 탱커 우선
+      if (e.priority === "ranged" && c.range >= RANGED_THRESHOLD) score -= 30; // 원거리 우선
       if (score < bestScore) {
         bestScore = score;
         best = c;
@@ -1417,7 +1560,7 @@ export class BattleEngine {
 
     if (best) {
       e.targetId = best.id;
-    } else if (e.kind === 'hero') {
+    } else if (e.kind === "hero") {
       // 폰 피드백: 영웅도 성을 향해 공성 — 탐지(35) 내 적 없으면 진입로 성벽→타워로 진군.
       // 체력/방어 3배 + 체젠으로 단독 전진 생존성 확보 (기존 폭사 우려 해소)
       const blocking = this.blockingWall(e);
@@ -1428,8 +1571,9 @@ export class BattleEngine {
       let nearest: CombatEntity | null = null;
       let nearestDist = Infinity;
       for (const c of this.entities) {
-        if (c.side === 'enemy' || c.state === 'dead') continue;
-        if (Math.hypot(c.x - towerX, c.y - towerY) > ENEMY_DEFEND_RADIUS) continue;
+        if (c.side === "enemy" || c.state === "dead") continue;
+        if (Math.hypot(c.x - towerX, c.y - towerY) > ENEMY_DEFEND_RADIUS)
+          continue;
         const dist = Math.hypot(c.x - e.x, c.y - e.y);
         if (dist < nearestDist) {
           nearestDist = dist;
@@ -1453,8 +1597,14 @@ export class BattleEngine {
     // 공성 우선: 타워가 사거리(+근접) 내면 누구든 우선 포격 — 포위하고도 타워 못 치는 문제 해결 (피드백).
     // 적 유닛 우선 → 타워 우선으로 전환: 사거리 안에 성이 들어오면 성을 친다(적 반격은 retaliate로 응전).
     // keep-out 링을 반영한 공성 사거리. 단, 내 진입로를 막는 성벽이 있으면 성벽부터 (벽 우회 방지)
-    const towerStop = Math.max(this.field.towerRadius + Math.max(e.range, 1), this.towerKeepout);
-    const tCenterDist = Math.hypot(this.field.towerX - e.x, this.field.towerY - e.y);
+    const towerStop = Math.max(
+      this.field.towerRadius + Math.max(e.range, 1),
+      this.towerKeepout,
+    );
+    const tCenterDist = Math.hypot(
+      this.field.towerX - e.x,
+      this.field.towerY - e.y,
+    );
     if (tCenterDist <= towerStop + BODY_RADIUS && !this.blockingWall(e)) {
       e.targetId = TOWER_TARGET;
       return;
@@ -1464,13 +1614,14 @@ export class BattleEngine {
     let best: CombatEntity | null = null;
     let bestScore = Infinity;
     for (const c of this.entities) {
-      if (c.side === 'ally' || c.state === 'dead' || isStructure(c.kind)) continue;
+      if (c.side === "ally" || c.state === "dead" || isStructure(c.kind))
+        continue;
       const dist = Math.hypot(c.x - e.x, c.y - e.y);
       if (dist > reach) continue;
-      if (e.kind === 'catapult' && dist < CATAPULT_MIN_RANGE) continue; // 최소 사거리 — 먼 적만 타격
+      if (e.kind === "catapult" && dist < CATAPULT_MIN_RANGE) continue; // 최소 사거리 — 먼 적만 타격
       let score = dist;
-      if (e.priority === 'tank') score -= c.def * 0.5;
-      if (e.priority === 'ranged' && c.range >= RANGED_THRESHOLD) score -= 30;
+      if (e.priority === "tank") score -= c.def * 0.5;
+      if (e.priority === "ranged" && c.range >= RANGED_THRESHOLD) score -= 30;
       if (score < bestScore) {
         bestScore = score;
         best = c;
@@ -1485,7 +1636,7 @@ export class BattleEngine {
     let structure: CombatEntity | null = null;
     let structDist = Infinity;
     for (const c of this.entities) {
-      if (c.state === 'dead' || !isStructure(c.kind)) continue;
+      if (c.state === "dead" || !isStructure(c.kind)) continue;
       const dist = Math.hypot(c.x - e.x, c.y - e.y);
       if (dist <= reach && dist < structDist) {
         structDist = dist;
@@ -1521,7 +1672,7 @@ export class BattleEngine {
     let best: CombatEntity | null = null;
     let bestDelta = Infinity;
     for (const c of this.entities) {
-      if (c.kind !== 'wall' || c.state === 'dead') continue;
+      if (c.kind !== "wall" || c.state === "dead") continue;
       const angW = Math.atan2(c.y - towerY, c.x - towerX);
       let delta = Math.abs(angE - angW);
       if (delta > Math.PI) delta = Math.PI * 2 - delta;
@@ -1533,7 +1684,13 @@ export class BattleEngine {
     return best && bestDelta <= halfSector ? best : null;
   }
 
-  private moveToward(e: CombatEntity, tx: number, ty: number, stopDist: number, dt: number) {
+  private moveToward(
+    e: CombatEntity,
+    tx: number,
+    ty: number,
+    stopDist: number,
+    dt: number,
+  ) {
     const dx = tx - e.x;
     const dy = ty - e.y;
     const dist = Math.hypot(dx, dy);
@@ -1548,30 +1705,35 @@ export class BattleEngine {
     const stopDist = Math.max(e.range, 1) + BODY_RADIUS;
     // 돌진: 교전 접근 이동 가속 (창병)
     const moveDt = e.chargeDmgPct > 0 ? dt * CHARGE_MOVE_MULT : dt;
-    const wasMoving = e.state === 'moving';
+    const wasMoving = e.state === "moving";
     const inRange = this.moveToward(e, target.x, target.y, stopDist, moveDt);
-    e.state = inRange ? 'attacking' : 'moving';
+    e.state = inRange ? "attacking" : "moving";
     if (inRange && e.attackCd <= 0 && e.atkSpeed > 0) {
       // 돌진 추가피해: 이동 끝에 진입한 첫 타에 적용
       if (wasMoving && e.chargeDmgPct > 0) e.chargeReady = true;
       e.attackCd = 1 / e.atkSpeed;
       this.performAttack(e, target);
       // 이중공격 (공속 카드 Lv5 MAX): 확률로 즉시 한 번 더
-      if (e.doubleStrikeChance > 0 && Math.random() < e.doubleStrikeChance) this.performAttack(e, target);
+      if (e.doubleStrikeChance > 0 && Math.random() < e.doubleStrikeChance)
+        this.performAttack(e, target);
     }
   }
 
   private moveAttackTower(e: CombatEntity, dt: number) {
     const { towerX, towerY, towerRadius } = this.field;
     // 근접 유닛은 성 외곽 keep-out 링에서 공성 — 성벽 UI 위로 올라가지 않게 (피드백)
-    const stopDist = Math.max(towerRadius + Math.max(e.range, 1), this.towerKeepout);
+    const stopDist = Math.max(
+      towerRadius + Math.max(e.range, 1),
+      this.towerKeepout,
+    );
     const inRange = this.moveToward(e, towerX, towerY, stopDist, dt);
-    e.state = inRange ? 'attacking' : 'moving';
+    e.state = inRange ? "attacking" : "moving";
     if (inRange && e.attackCd <= 0 && e.atkSpeed > 0) {
       e.attackCd = 1 / e.atkSpeed;
       this.siegeTower(e);
       // 이중공격 (공속 카드 Lv5 MAX)
-      if (e.doubleStrikeChance > 0 && Math.random() < e.doubleStrikeChance) this.siegeTower(e);
+      if (e.doubleStrikeChance > 0 && Math.random() < e.doubleStrikeChance)
+        this.siegeTower(e);
     }
   }
 
@@ -1579,7 +1741,9 @@ export class BattleEngine {
   private siegeTower(e: CombatEntity) {
     const { towerX, towerY, towerRadius } = this.field;
     const siegeAtk =
-      e.atk * e.siegeDmgMult * (this.enemyAlive <= SIEGE_CLEANUP_THRESHOLD ? SIEGE_CLEANUP_MULT : 1);
+      e.atk *
+      e.siegeDmgMult *
+      (this.enemyAlive <= SIEGE_CLEANUP_THRESHOLD ? SIEGE_CLEANUP_MULT : 1);
     if (e.projectileSpeed > 0) {
       // 타워 가장자리 조준 — 정지 목표라 항상 명중
       const dx = e.x - towerX;
@@ -1592,7 +1756,7 @@ export class BattleEngine {
         true,
         siegeAtk,
         undefined,
-        e.kind === 'hero', // 영웅이면 타워 포격도 시안 화살 비주얼
+        e.kind === "hero", // 영웅이면 타워 포격도 시안 화살 비주얼
       );
     } else {
       this.damageTower(siegeAtk);
@@ -1601,11 +1765,14 @@ export class BattleEngine {
 
   private damageTower(atk: number) {
     if (this.invulnLeft > 0) return; // 팔라딘 무적기
-    this.towerHp = Math.max(0, this.towerHp - damage(atk, this.config.tower.def));
+    this.towerHp = Math.max(
+      0,
+      this.towerHp - damage(atk, this.config.tower.def),
+    );
     this.towerFlash = TOWER_FLASH; // 타워 피격 플래시
     // 팔라딘: 타워 HP 50% 이하 시 무적 5초 1회 자동 발동 (설계 09)
     if (
-      this.enemyHero.id === 'paladin' &&
+      this.enemyHero.id === "paladin" &&
       !this.invulnUsed &&
       this.towerHp > 0 &&
       this.towerHp <= this.config.tower.hp * 0.5
@@ -1613,15 +1780,23 @@ export class BattleEngine {
       this.invulnUsed = true;
       this.invulnLeft = 5;
     }
-    if (this.towerHp <= 0) this.result = 'victory';
+    if (this.towerHp <= 0) this.result = "victory";
   }
 
   /** 단일/광역 공격 수행. 회피 판정 포함 */
   private performAttack(attacker: CombatEntity, target: CombatEntity) {
     if (attacker.projectileSpeed > 0) {
-      if (attacker.kind === 'hero') {
+      if (attacker.kind === "hero") {
         // 영웅 화살: 호밍(항상 명중) + 전용 비주얼
-        this.launchProjectile(attacker, target.x, target.y, false, undefined, target.id, true);
+        this.launchProjectile(
+          attacker,
+          target.x,
+          target.y,
+          false,
+          undefined,
+          target.id,
+          true,
+        );
       } else {
         // 지면 조준 투사체(투석기): 발사 시점 타깃 위치로 비행 — 이동하면 빗나감
         this.launchProjectile(attacker, target.x, target.y, false);
@@ -1630,17 +1805,22 @@ export class BattleEngine {
     }
     // 활/마법은 즉시타격이지만 발사 시각 트레이서를 남긴다 (피드백 3)
     const k = attacker.kind;
-    if (k === 'archer' || k === 'mageLow' || k === 'mageMid' || k === 'mageHigh') {
+    if (
+      k === "archer" ||
+      k === "mageLow" ||
+      k === "mageMid" ||
+      k === "mageHigh"
+    ) {
       this.spawnTracer(attacker, target.x, target.y);
     }
     // 마법사 고급 = 체인 라이트닝 (본 타깃 + 인접 2회 튕김 + 점멸 이펙트, 피드백)
-    if (k === 'mageHigh') {
+    if (k === "mageHigh") {
       this.chainLightning(attacker, target);
       return;
     }
     if (attacker.aoe > 1.5) {
       for (const c of this.entities) {
-        if (c.side === attacker.side || c.state === 'dead') continue;
+        if (c.side === attacker.side || c.state === "dead") continue;
         if (Math.hypot(c.x - target.x, c.y - target.y) <= attacker.aoe) {
           this.applyDamage(attacker, c);
         }
@@ -1652,7 +1832,12 @@ export class BattleEngine {
         let extra: CombatEntity | null = null;
         let best = Infinity;
         for (const c of this.entities) {
-          if (c.side === attacker.side || c.state === 'dead' || c.id === target.id) continue;
+          if (
+            c.side === attacker.side ||
+            c.state === "dead" ||
+            c.id === target.id
+          )
+            continue;
           const d = Math.hypot(c.x - target.x, c.y - target.y);
           if (d <= PIERCE_RADIUS && d < best) {
             best = d;
@@ -1669,8 +1854,13 @@ export class BattleEngine {
     // 도발: 공격 시 확률로 주변 적 타깃을 자신으로 전환 (방패병)
     if (attacker.taunt > 0 && Math.random() < attacker.taunt) {
       for (const c of this.entities) {
-        if (c.side === attacker.side || c.state === 'dead' || isStructure(c.kind)) continue;
-        if (c.priority === 'healAlly' || c.kind === 'bomber') continue; // 고유 행동 유지
+        if (
+          c.side === attacker.side ||
+          c.state === "dead" ||
+          isStructure(c.kind)
+        )
+          continue;
+        if (c.priority === "healAlly" || c.kind === "bomber") continue; // 고유 행동 유지
         if (Math.hypot(c.x - attacker.x, c.y - attacker.y) <= TAUNT_RADIUS) {
           c.targetId = attacker.id;
         }
@@ -1687,7 +1877,12 @@ export class BattleEngine {
       let best: CombatEntity | null = null;
       let bestD = Infinity;
       for (const c of this.entities) {
-        if (c.side === attacker.side || c.state === 'dead' || isStructure(c.kind)) continue;
+        if (
+          c.side === attacker.side ||
+          c.state === "dead" ||
+          isStructure(c.kind)
+        )
+          continue;
         if (hits.includes(c)) continue;
         const d = Math.hypot(c.x - from.x, c.y - from.y);
         if (d <= CHAIN_RADIUS && d < bestD) {
@@ -1701,19 +1896,24 @@ export class BattleEngine {
     }
     for (const h of hits) {
       this.applyDamage(attacker, h);
-      this.spawnEffect(h.x, h.y, 2.2, 'rgba(150,210,255,0.95)', 0.22); // 라이트닝 점멸
+      this.spawnEffect(h.x, h.y, 2.2, "rgba(150,210,255,0.95)", 0.22); // 라이트닝 점멸
     }
   }
 
   /** 멀티샷: 사거리(+보너스) 내 가까운 적 count마리를 본 타깃과 별개로 추가 타격 */
-  private multishotExtra(attacker: CombatEntity, excludeId: number, count: number) {
+  private multishotExtra(
+    attacker: CombatEntity,
+    excludeId: number,
+    count: number,
+  ) {
     const reach = Math.max(attacker.range, 1) + MULTISHOT_BONUS;
     const hit = new Set<number>([excludeId]);
     for (let k = 0; k < count; k++) {
       let best: CombatEntity | null = null;
       let bestD = Infinity;
       for (const c of this.entities) {
-        if (c.side === attacker.side || c.state === 'dead' || hit.has(c.id)) continue;
+        if (c.side === attacker.side || c.state === "dead" || hit.has(c.id))
+          continue;
         if (isStructure(c.kind)) continue;
         const d = Math.hypot(c.x - attacker.x, c.y - attacker.y);
         if (d <= reach && d < bestD) {
@@ -1769,7 +1969,7 @@ export class BattleEngine {
     for (const p of this.projectiles) {
       if (p.homingId !== undefined) {
         const t = this.byId.get(p.homingId);
-        if (t && t.state !== 'dead') {
+        if (t && t.state !== "dead") {
           p.tx = t.x;
           p.ty = t.y;
         }
@@ -1792,30 +1992,35 @@ export class BattleEngine {
   /** 지면 폭발: 반경 내 상대측 전체 피해. 위치로 피하는 방식이라 회피(evade) 미적용 */
   private impactProjectile(p: Projectile) {
     if (p.targetTower) {
-      if (p.side === 'ally') this.damageTower(p.atk);
+      if (p.side === "ally") this.damageTower(p.atk);
       return;
     }
     const shooter = this.byId.get(p.attackerId);
     for (const c of this.entities) {
-      if (c.side === p.side || c.state === 'dead') continue;
+      if (c.side === p.side || c.state === "dead") continue;
       if (Math.hypot(c.x - p.tx, c.y - p.ty) > p.aoe) continue;
       let dmg = damage(p.atk, c.def);
       if (p.critChance > 0 && Math.random() < p.critChance) dmg *= 1.5;
       this.hurt(c, dmg);
       if (isDead(c)) continue;
       // 화상/기절 (투석기 화염공격·기절 카드) — % 피해형은 구조물 미적용
-      if (p.burnChance > 0 && !isStructure(c.kind) && Math.random() < p.burnChance) {
+      if (
+        p.burnChance > 0 &&
+        !isStructure(c.kind) &&
+        Math.random() < p.burnChance
+      ) {
         c.burnLeft = DOT_DURATION;
         c.burnRate = (c.maxHp * p.burnPct) / 100;
       }
       if (p.stunSec > 0 && !isStructure(c.kind)) {
         c.stunLeft = Math.max(c.stunLeft, p.stunSec);
       }
-      if (shooter && shooter.state !== 'dead') {
+      if (shooter && shooter.state !== "dead") {
         this.retaliate(c, shooter.id);
       }
     }
-    if (p.arrow) this.spawnEffect(p.tx, p.ty, 2.4, 'rgba(150,210,255,0.9)', 0.22); // 영웅 화살 명중 섬광
+    if (p.arrow)
+      this.spawnEffect(p.tx, p.ty, 2.4, "rgba(150,210,255,0.9)", 0.22); // 영웅 화살 명중 섬광
   }
 
   // ── 트랩 / 적 영웅 (설계 09, 11) ──────────────────────
@@ -1823,14 +2028,15 @@ export class BattleEngine {
   /** 트랩: 아군 접근 시 피해 + 1초 기절, 1회 발동 후 소멸 (발동 시 EXP 없음) */
   private updateTraps() {
     for (const t of this.entities) {
-      if (t.kind !== 'trap' || t.state === 'dead') continue;
+      if (t.kind !== "trap" || t.state === "dead") continue;
       for (const c of this.entities) {
-        if (c.side !== 'ally' || c.state === 'dead') continue;
+        if (c.side !== "ally" || c.state === "dead") continue;
         if (Math.hypot(c.x - t.x, c.y - t.y) > TRAP_TRIGGER.radius) continue;
-        const atk = TRAP_TRIGGER.atk * this.config.statMultiplier * TRAP_TRIGGER.ratio;
+        const atk =
+          TRAP_TRIGGER.atk * this.config.statMultiplier * TRAP_TRIGGER.ratio;
         this.hurt(c, damage(atk, c.def));
         c.stunLeft = Math.max(c.stunLeft, TRAP_TRIGGER.stunSec);
-        t.state = 'dead';
+        t.state = "dead";
         t.hp = 0;
         break;
       }
@@ -1850,7 +2056,7 @@ export class BattleEngine {
       let target: CombatEntity | null = null;
       let best = Infinity;
       for (const c of this.entities) {
-        if (c.side !== 'ally' || c.state === 'dead') continue;
+        if (c.side !== "ally" || c.state === "dead") continue;
         const dist = Math.hypot(c.x - towerX, c.y - towerY);
         if (dist <= reach && dist < best) {
           best = dist;
@@ -1872,37 +2078,59 @@ export class BattleEngine {
     // 스킬: 경고 텔레그래프(시전 딜레이) 후 광역 타격 — 위협 가독성 (P2)
     this.enemyHeroSkillCd -= dt;
     if (this.enemyHeroSkillCd <= 0) {
-      if (def.id === 'mage') {
+      if (def.id === "mage") {
         // 필드 랜덤 메테오 5발: 발당 공격력 200%, 반경 3 — 0.9초 낙하 경고
-        const allies = this.entities.filter((c) => c.side === 'ally' && c.state !== 'dead');
+        const allies = this.entities.filter(
+          (c) => c.side === "ally" && c.state !== "dead",
+        );
         if (allies.length > 0) {
           for (let i = 0; i < 5; i++) {
             const at = allies[Math.floor(Math.random() * allies.length)];
-            this.queueStrike(at.x, at.y, 3, this.enemyHeroAtk * 2, METEOR_CAST, 'rgba(255,90,90,0.95)');
+            this.queueStrike(
+              at.x,
+              at.y,
+              3,
+              this.enemyHeroAtk * 2,
+              METEOR_CAST,
+              "rgba(255,90,90,0.95)",
+            );
           }
           this.enemyHeroSkillCd = this.enemyHeroSkillCdMax;
         }
       } else {
         // 기사 휩쓸기 (반경 5, 120%) / 팔라딘 신성 광역 (반경 6, 180%) — 0.7초 시전 경고
-        const radius = towerRadius + (def.id === 'paladin' ? 6 : 5);
-        const ratio = def.id === 'paladin' ? 1.8 : 1.2;
+        const radius = towerRadius + (def.id === "paladin" ? 6 : 5);
+        const ratio = def.id === "paladin" ? 1.8 : 1.2;
         const hasTarget = this.entities.some(
           (c) =>
-            c.side === 'ally' &&
-            c.state !== 'dead' &&
+            c.side === "ally" &&
+            c.state !== "dead" &&
             Math.hypot(c.x - towerX, c.y - towerY) <= radius,
         );
         if (hasTarget) {
-          this.queueStrike(towerX, towerY, radius, this.enemyHeroAtk * ratio, SWEEP_CAST, 'rgba(255,120,60,0.9)');
+          this.queueStrike(
+            towerX,
+            towerY,
+            radius,
+            this.enemyHeroAtk * ratio,
+            SWEEP_CAST,
+            "rgba(255,120,60,0.9)",
+          );
           this.enemyHeroSkillCd = this.enemyHeroSkillCdMax;
         }
       }
     }
 
     // 팔라딘 패시브: 회복 오라 — 타워 주변 적 유닛 HP/초 = 공격력 × 0.3
-    if (def.id === 'paladin') {
+    if (def.id === "paladin") {
       for (const c of this.entities) {
-        if (c.side !== 'enemy' || c.state === 'dead' || isStructure(c.kind) || c.noHeal) continue;
+        if (
+          c.side !== "enemy" ||
+          c.state === "dead" ||
+          isStructure(c.kind) ||
+          c.noHeal
+        )
+          continue;
         if (c.hp >= c.maxHp) continue;
         if (Math.hypot(c.x - towerX, c.y - towerY) <= towerRadius + 5) {
           c.hp = Math.min(c.maxHp, c.hp + this.enemyHeroAtk * 0.3 * dt);
@@ -1914,7 +2142,7 @@ export class BattleEngine {
   /** 적 영웅 스킬/투사체용 광역 피해 — 아군 측에 적용 (피해감소/불굴 hurt 경유) */
   private areaDamage(x: number, y: number, radius: number, atk: number) {
     for (const c of this.entities) {
-      if (c.side !== 'ally' || c.state === 'dead') continue;
+      if (c.side !== "ally" || c.state === "dead") continue;
       if (Math.hypot(c.x - x, c.y - y) > radius) continue;
       this.hurt(c, damage(atk, c.def));
     }
@@ -1925,7 +2153,7 @@ export class BattleEngine {
    * 반환 = 실제 가해진 피해 (흡혈 계산용)
    */
   private hurt(target: CombatEntity, dmg: number): number {
-    if (target.state === 'dead') return 0;
+    if (target.state === "dead") return 0;
     target.hitFlash = HIT_FLASH; // 타격감 연출
     // 피해감소(스펙) + 수호 오라 = 곱연산 합성
     if (target.dmgReduction > 0 || target.auraShield > 0) {
@@ -1934,7 +2162,11 @@ export class BattleEngine {
     target.hp -= dmg;
     if (target.hp <= 0) {
       // 불굴: 치명적 피해 시 HP 1로 생존 (쿨타임)
-      if (target.undyingCdMax > 0 && target.undyingCd <= 0 && !isStructure(target.kind)) {
+      if (
+        target.undyingCdMax > 0 &&
+        target.undyingCd <= 0 &&
+        !isStructure(target.kind)
+      ) {
         target.hp = 1;
         target.undyingCd = target.undyingCdMax;
       } else {
@@ -1950,9 +2182,19 @@ export class BattleEngine {
     const totalEvade = target.evade + (rangedAtk ? target.evadeVsRanged : 0);
     if (totalEvade > 0 && Math.random() < totalEvade) {
       // 카운터(회피율 카드 MAX): 회피 시 공격자에게 공격력 배수 피해
-      if (target.counter > 0 && attacker.state !== 'dead' && !isStructure(attacker.kind)) {
+      if (
+        target.counter > 0 &&
+        attacker.state !== "dead" &&
+        !isStructure(attacker.kind)
+      ) {
         this.hurt(attacker, damage(target.atk * target.counter, attacker.def));
-        this.spawnEffect(attacker.x, attacker.y, 3, 'rgba(120,200,255,0.9)', 0.25);
+        this.spawnEffect(
+          attacker.x,
+          attacker.y,
+          3,
+          "rgba(120,200,255,0.9)",
+          0.25,
+        );
       }
       return;
     }
@@ -1967,7 +2209,7 @@ export class BattleEngine {
       } else {
         this.onDeath(target);
       }
-      this.spawnEffect(target.x, target.y, 4, 'rgba(255,80,80,0.95)', 0.35); // 일격 연출
+      this.spawnEffect(target.x, target.y, 4, "rgba(255,80,80,0.95)", 0.35); // 일격 연출
       return;
     }
     let atk = attacker.atk;
@@ -1984,8 +2226,10 @@ export class BattleEngine {
     }
     let dmg = damage(atk, target.def);
     // 원거리 공격 피해 반감 (방패병 40%, 검사 30%)
-    if (rangedAtk && target.rangedDmgReduction > 0) dmg *= 1 - target.rangedDmgReduction;
-    if (attacker.critChance > 0 && Math.random() < attacker.critChance) dmg *= 1.5;
+    if (rangedAtk && target.rangedDmgReduction > 0)
+      dmg *= 1 - target.rangedDmgReduction;
+    if (attacker.critChance > 0 && Math.random() < attacker.critChance)
+      dmg *= 1.5;
     // 추가타/불화살: 공격력 % 고정 추가피해 (방어 미적용)
     if (attacker.bonusChance > 0 && Math.random() < attacker.bonusChance) {
       dmg += atk * (attacker.bonusDmgPct / 100);
@@ -1996,11 +2240,23 @@ export class BattleEngine {
       dmg *= 1 + attacker.chargeDmgPct / 100;
     }
     const dealt = this.hurt(target, dmg);
-    if (attacker.lifestealPct > 0 && attacker.state !== 'dead' && !attacker.noHeal) {
-      attacker.hp = Math.min(attacker.maxHp, attacker.hp + dealt * attacker.lifestealPct);
+    if (
+      attacker.lifestealPct > 0 &&
+      attacker.state !== "dead" &&
+      !attacker.noHeal
+    ) {
+      attacker.hp = Math.min(
+        attacker.maxHp,
+        attacker.hp + dealt * attacker.lifestealPct,
+      );
     }
     // 피해 반사(방어력 카드 MAX): 받은 피해 일부를 공격자에게 (반사는 재반사·반격 미유발)
-    if (target.reflect > 0 && dealt > 0 && attacker.state !== 'dead' && !isStructure(attacker.kind)) {
+    if (
+      target.reflect > 0 &&
+      dealt > 0 &&
+      attacker.state !== "dead" &&
+      !isStructure(attacker.kind)
+    ) {
       this.hurt(attacker, dealt * target.reflect);
     }
     // 가시(체력 카드 MAX): 피격 시 주변 적 광역 (쿨타임 제한)
@@ -2009,7 +2265,11 @@ export class BattleEngine {
     }
     if (isDead(target)) {
       // 코인 폭발 / 골드 즉사 (아군이 적 처치 시)
-      if (attacker.side === 'ally' && target.side === 'enemy' && !isStructure(target.kind)) {
+      if (
+        attacker.side === "ally" &&
+        target.side === "enemy" &&
+        !isStructure(target.kind)
+      ) {
         this.onAllyKill(attacker, target);
       }
       return;
@@ -2043,15 +2303,15 @@ export class BattleEngine {
    * 탐지 범위 밖 원거리 포격에 일방적으로 죽는 문제 방지 (시뮬 검증)
    */
   private retaliate(victim: CombatEntity, attackerId: number) {
-    if (victim.state === 'dead' || isStructure(victim.kind)) return;
-    if (victim.priority === 'healAlly' || victim.kind === 'bomber') return; // 고유 행동 유지
+    if (victim.state === "dead" || isStructure(victim.kind)) return;
+    if (victim.priority === "healAlly" || victim.kind === "bomber") return; // 고유 행동 유지
     const t = victim.targetId;
     if (t === NO_TARGET || t === TOWER_TARGET) {
       victim.targetId = attackerId;
       return;
     }
     const cur = this.byId.get(t);
-    if (!cur || cur.state === 'dead' || isStructure(cur.kind)) {
+    if (!cur || cur.state === "dead" || isStructure(cur.kind)) {
       victim.targetId = attackerId;
     }
   }
@@ -2061,10 +2321,12 @@ export class BattleEngine {
     e.thornsCd = THORNS_CD;
     const dmg = e.maxHp * e.thorns;
     for (const c of this.entities) {
-      if (c.side === e.side || c.state === 'dead' || isStructure(c.kind)) continue;
-      if (Math.hypot(c.x - e.x, c.y - e.y) <= THORNS_RADIUS) this.hurt(c, damage(dmg, c.def));
+      if (c.side === e.side || c.state === "dead" || isStructure(c.kind))
+        continue;
+      if (Math.hypot(c.x - e.x, c.y - e.y) <= THORNS_RADIUS)
+        this.hurt(c, damage(dmg, c.def));
     }
-    this.spawnEffect(e.x, e.y, THORNS_RADIUS, 'rgba(120,220,160,0.6)', 0.25);
+    this.spawnEffect(e.x, e.y, THORNS_RADIUS, "rgba(120,220,160,0.6)", 0.25);
   }
 
   /** 아군 처치 보너스 (골드 카드): 코인 폭발(광역) + MAX 랜덤 즉사. chain = 연쇄 깊이 가드 */
@@ -2072,21 +2334,44 @@ export class BattleEngine {
     if (killer.coinBlast > 0) {
       const blast = killer.atk * killer.coinBlast;
       for (const c of this.entities) {
-        if (c.side !== 'enemy' || c.state === 'dead' || isStructure(c.kind) || c.id === victim.id) continue;
-        if (Math.hypot(c.x - victim.x, c.y - victim.y) <= COIN_BLAST_RADIUS) this.hurt(c, damage(blast, c.def));
+        if (
+          c.side !== "enemy" ||
+          c.state === "dead" ||
+          isStructure(c.kind) ||
+          c.id === victim.id
+        )
+          continue;
+        if (Math.hypot(c.x - victim.x, c.y - victim.y) <= COIN_BLAST_RADIUS)
+          this.hurt(c, damage(blast, c.def));
       }
-      this.spawnEffect(victim.x, victim.y, COIN_BLAST_RADIUS, 'rgba(255,215,0,0.85)', 0.3);
+      this.spawnEffect(
+        victim.x,
+        victim.y,
+        COIN_BLAST_RADIUS,
+        "rgba(255,215,0,0.85)",
+        0.3,
+      );
     }
     // 골드 MAX: 처치 시 확률로 랜덤 일반 적 즉사 (보스·미니보스·구조물 제외, 연쇄 가능)
-    if (chain < GOLD_EXECUTE_MAX_CHAIN && killer.goldExecute > 0 && Math.random() < killer.goldExecute) {
+    if (
+      chain < GOLD_EXECUTE_MAX_CHAIN &&
+      killer.goldExecute > 0 &&
+      Math.random() < killer.goldExecute
+    ) {
       const pool: CombatEntity[] = [];
       for (const c of this.entities) {
-        if (c.side !== 'enemy' || c.state === 'dead' || isStructure(c.kind) || BOSS_KINDS.has(c.kind)) continue;
+        if (
+          c.side !== "enemy" ||
+          c.state === "dead" ||
+          isStructure(c.kind) ||
+          BOSS_KINDS.has(c.kind)
+        )
+          continue;
         pool.push(c);
       }
       if (pool.length > 0) {
         const t = pool[Math.floor(Math.random() * pool.length)];
-        this.spawnEffect(t.x, t.y, 4, 'rgba(255,215,0,0.95)', 0.35);
+        this.spawnEffect(t.x, t.y, 4, "rgba(255,215,0,0.95)", 0.35);
         // 연쇄: 즉사도 아군 처치 보너스 재발동 (코인 폭발 + 추가 즉사 연쇄, 깊이 제한)
         this.onAllyKill(killer, t, chain + 1);
         this.onDeath(t);
@@ -2095,15 +2380,16 @@ export class BattleEngine {
   }
 
   private onDeath(e: CombatEntity) {
-    if (e.state === 'dead') return;
-    e.state = 'dead';
+    if (e.state === "dead") return;
+    e.state = "dead";
     e.hp = 0;
-    if (e.side === 'enemy') {
+    if (e.side === "enemy") {
       if (!isStructure(e.kind)) this.kills++; // 구조물은 EXP만 (처치수 제외)
       this.gainExp(e.killExp);
-    } else if (e.kind === 'hero') {
+    } else if (e.kind === "hero") {
       // 영웅 부활 시간 감소 카드 적용
-      this.reviveLeft = this.heroDef.reviveSeconds * (1 - this.cards.reviveCdrPct / 100);
+      this.reviveLeft =
+        this.heroDef.reviveSeconds * (1 - this.cards.reviveCdrPct / 100);
     }
   }
 
@@ -2111,7 +2397,9 @@ export class BattleEngine {
     const cardBoost = 1 + this.cards.expPct / 100;
     // 5분 경과 후 경험치 2배 (피드백 6: 장기전 성장 가속)
     const timeMult = this.time >= LATE_GAME_EXP_TIME ? 2 : 1;
-    this.totalExp += Math.round(baseExp * this.config.expMultiplier * cardBoost * timeMult);
+    this.totalExp += Math.round(
+      baseExp * this.config.expMultiplier * cardBoost * timeMult,
+    );
     while (this.totalExp >= expTotalForLevel(this.level + 1)) {
       this.level++;
       this.pendingPicks++;
@@ -2123,7 +2411,7 @@ export class BattleEngine {
   private applyHeroGrowth() {
     this.refreshHeroStats();
     const h = this.hero;
-    if (h.state !== 'dead') {
+    if (h.state !== "dead") {
       h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.25);
     }
   }
@@ -2170,7 +2458,7 @@ export class BattleEngine {
     let target: CombatEntity | null = null;
     let lowest = 1;
     for (const c of this.entities) {
-      if (c.side !== e.side || c.state === 'dead' || c.id === e.id) continue;
+      if (c.side !== e.side || c.state === "dead" || c.id === e.id) continue;
       if (isStructure(c.kind) || c.noHeal) continue; // 구조물·기계(투석기) 회복 대상 제외
       const ratio = c.hp / c.maxHp;
       if (ratio < lowest && ratio < 0.999) {
@@ -2179,11 +2467,17 @@ export class BattleEngine {
       }
     }
     if (!target) {
-      e.state = 'moving';
+      e.state = "moving";
       return;
     }
-    const inRange = this.moveToward(e, target.x, target.y, e.range + BODY_RADIUS, dt);
-    e.state = inRange ? 'attacking' : 'moving';
+    const inRange = this.moveToward(
+      e,
+      target.x,
+      target.y,
+      e.range + BODY_RADIUS,
+      dt,
+    );
+    e.state = inRange ? "attacking" : "moving";
     if (inRange) {
       const heal = HEALER_HEAL_PER_SEC * (1 + e.healBonus) * dt;
       target.hp = Math.min(target.maxHp, target.hp + heal);
@@ -2195,12 +2489,12 @@ export class BattleEngine {
     if (e.exploded) return;
     e.exploded = true;
     for (const c of this.entities) {
-      if (c.side === e.side || c.state === 'dead') continue;
+      if (c.side === e.side || c.state === "dead") continue;
       if (Math.hypot(c.x - e.x, c.y - e.y) <= e.aoe) {
         this.applyDamage(e, c);
       }
     }
-    this.spawnEffect(e.x, e.y, e.aoe, 'rgba(255,140,40,0.95)', 0.4);
+    this.spawnEffect(e.x, e.y, e.aoe, "rgba(255,140,40,0.95)", 0.4);
   }
 
   /** 폭탄병: 가장 가까운 상대에게 접근 후 자폭 (자폭 시 EXP 50%) */
@@ -2209,9 +2503,12 @@ export class BattleEngine {
     let nearest: CombatEntity | null = null;
     let nearestDist = Infinity;
     for (const c of this.entities) {
-      if (c.side === e.side || c.state === 'dead') continue;
+      if (c.side === e.side || c.state === "dead") continue;
       // 적 폭탄병도 방어 태세 — 방어 반경 밖 아군은 무시
-      if (e.side === 'enemy' && Math.hypot(c.x - towerX, c.y - towerY) > ENEMY_DEFEND_RADIUS) {
+      if (
+        e.side === "enemy" &&
+        Math.hypot(c.x - towerX, c.y - towerY) > ENEMY_DEFEND_RADIUS
+      ) {
         continue;
       }
       const dist = Math.hypot(c.x - e.x, c.y - e.y);
@@ -2221,8 +2518,8 @@ export class BattleEngine {
       }
     }
     if (!nearest) {
-      e.state = 'moving';
-      if (e.side === 'enemy') {
+      e.state = "moving";
+      if (e.side === "enemy") {
         this.moveToward(e, towerX, towerY, towerRadius + ENEMY_GUARD_RING, dt);
       }
       return;
@@ -2230,13 +2527,13 @@ export class BattleEngine {
     // 근접 신관: 블래스트 반경 근처에 도달하면 터진다 (코앞까지 비비지 않게 — 피드백)
     const reached = this.moveToward(e, nearest.x, nearest.y, e.aoe * 0.8, dt);
     if (!reached) {
-      e.state = 'moving';
+      e.state = "moving";
       return;
     }
     this.explodeBomber(e);
-    e.state = 'dead';
+    e.state = "dead";
     e.hp = 0;
-    if (e.side === 'enemy') {
+    if (e.side === "enemy") {
       this.kills++;
       this.gainExp(BOMBER_EXPLODED_EXP);
     }
@@ -2257,15 +2554,32 @@ export class BattleEngine {
     const { width, height } = this.field;
     for (let i = 0; i < len; i++) {
       const a = entities[i];
-      if (a.state === 'dead' || a.side !== 'ally' || a.kind === 'hero' || a.kind === 'bomber' || isStructure(a.kind) || a.age > SEPARATION_GRACE) continue;
+      if (
+        a.state === "dead" ||
+        a.side !== "ally" ||
+        a.kind === "hero" ||
+        a.kind === "bomber" ||
+        isStructure(a.kind) ||
+        a.age > SEPARATION_GRACE
+      )
+        continue;
       for (let j = i + 1; j < len; j++) {
         const b = entities[j];
-        if (b.state === 'dead' || b.side !== 'ally' || b.kind === 'hero' || b.kind === 'bomber' || isStructure(b.kind) || b.age > SEPARATION_GRACE) continue;
+        if (
+          b.state === "dead" ||
+          b.side !== "ally" ||
+          b.kind === "hero" ||
+          b.kind === "bomber" ||
+          isStructure(b.kind) ||
+          b.age > SEPARATION_GRACE
+        )
+          continue;
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const dist = Math.hypot(dx, dy);
         if (dist < SEPARATION_RADIUS && dist > 0.01) {
-          const push = ((SEPARATION_RADIUS - dist) / SEPARATION_RADIUS) * SEPARATION_FORCE;
+          const push =
+            ((SEPARATION_RADIUS - dist) / SEPARATION_RADIUS) * SEPARATION_FORCE;
           const nx = dx / dist;
           const ny = dy / dist;
           a.x = Math.min(width - 3, Math.max(3, a.x + nx * push));
@@ -2280,15 +2594,17 @@ export class BattleEngine {
   private removeDead() {
     let needsClean = false;
     for (const e of this.entities) {
-      if (e.state === 'dead' && e.kind !== 'hero') {
+      if (e.state === "dead" && e.kind !== "hero") {
         // 폭탄병은 요격당해 죽어도 터진다 (자폭 못 하고 뭉쳐 죽는 문제 해결, 피드백)
-        if (e.kind === 'bomber' && !e.exploded) this.explodeBomber(e);
+        if (e.kind === "bomber" && !e.exploded) this.explodeBomber(e);
         this.byId.delete(e.id);
         needsClean = true;
       }
     }
     if (needsClean) {
-      this.entities = this.entities.filter((e) => e.state !== 'dead' || e.kind === 'hero');
+      this.entities = this.entities.filter(
+        (e) => e.state !== "dead" || e.kind === "hero",
+      );
     }
   }
 
@@ -2296,12 +2612,12 @@ export class BattleEngine {
 
   /** 생존 적 유닛 수 (구조물 제외) — HUD 상단 표시 (피드백 11) */
   get enemyAlive(): number {
-    return this.countSide('enemy');
+    return this.countSide("enemy");
   }
 
   /** 생존 아군 유닛 수 (영웅·구조물 제외) — HUD 하단 표시 (피드백 11) */
   get allyAlive(): number {
-    return this.countSide('ally') - (this.hero.state !== 'dead' ? 1 : 0);
+    return this.countSide("ally") - (this.hero.state !== "dead" ? 1 : 0);
   }
 
   get expInLevel(): number {

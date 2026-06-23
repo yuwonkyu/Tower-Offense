@@ -34,47 +34,52 @@ const STAGE_PATTERNS: StagePattern[] = [
   { units: ['spear'], formation: { spear: 30 } }, // 3
   { units: ['archer'], formation: { archer: 30 } }, // 4
   { units: ['catapult'], formation: { catapult: 30 } }, // 5
-  { units: ['swordsman', 'shield'] }, // 6
-  { units: ['archer', 'spear'] }, // 7
-  { units: ['shield', 'swordsman', 'archer'] }, // 8
-  { units: ['shield', 'catapult', 'archer', 'spear'] }, // 9
-  { units: BASE5 }, // 10 — 기사 BOSS 스테이지
-  // 11~20 마법사 시대
-  { units: ['shield', 'spear', 'mageLow'], unlocksUnit: 'mageLow' }, // 11
-  { units: ['swordsman', 'archer', 'mageLow'] }, // 12
-  { units: [...BASE5, 'mageLow'] }, // 13
-  { units: ['swordsman', 'shield', 'assassin'], unlocksUnit: 'assassin' }, // 14
-  { units: ['archer', 'spear', 'assassin'] }, // 15
-  { units: [...BASE5, 'assassin', 'mageLow'] }, // 16
-  { units: [...BASE5, 'assassin', 'mageLow'] }, // 17 — 투석기 강화
-  { units: [...BASE5, 'mageMid', 'bomber'], unlocksUnit: 'mageMid' }, // 18 — 폭탄병도 동시 등장
-  { units: [...BASE5, 'mageMid', 'bomber', 'assassin'] }, // 19
-  { units: [...BASE5, 'mageMid', 'bomber', 'assassin'] }, // 20 — 마법사 BOSS 스테이지
-  // 21~30 팔라딘 시대
-  { units: [...BASE5, 'mageMid', 'healer'], unlocksUnit: 'healer' }, // 21
-  { units: [...BASE5, 'mageMid', 'healer', 'bomber'] }, // 22
-  { units: [...BASE5, 'healer', 'assassin', 'bomber'] }, // 23
-  { units: [...BASE5, 'cavalry', 'healer'], unlocksUnit: 'cavalry' }, // 24
+  // 6~10 기사 구간 (배치형 · 총량 30 · garrison 지속보충)
+  { units: ['shield', 'swordsman'], formation: { shield: 15, swordsman: 15 } }, // 6
+  { units: ['spear', 'archer'], formation: { spear: 15, archer: 15 } }, // 7
+  { units: ['shield', 'swordsman', 'archer'], formation: { shield: 10, swordsman: 10, archer: 10 } }, // 8
+  { units: ['shield', 'spear', 'archer', 'catapult'], formation: { shield: 9, spear: 9, archer: 9, catapult: 3 } }, // 9
+  { units: BASE5, formation: { shield: 7, swordsman: 7, spear: 7, archer: 6, catapult: 3 } }, // 10 ⭐기사 보스
+  // 11~20 마법사 시대 (총량 40)
+  { units: ['shield', 'spear', 'mageLow'], formation: { shield: 14, spear: 14, mageLow: 12 }, unlocksUnit: 'mageLow' }, // 11
+  { units: ['swordsman', 'archer', 'mageLow'], formation: { swordsman: 14, archer: 14, mageLow: 12 } }, // 12
+  { units: [...BASE5, 'mageLow'], formation: { shield: 8, swordsman: 8, spear: 7, archer: 8, catapult: 3, mageLow: 6 } }, // 13
+  { units: ['swordsman', 'shield', 'assassin'], formation: { swordsman: 15, shield: 15, assassin: 10 }, unlocksUnit: 'assassin' }, // 14
+  { units: ['archer', 'spear', 'assassin'], formation: { archer: 15, spear: 15, assassin: 10 } }, // 15
+  { units: [...BASE5, 'assassin', 'mageLow'], formation: { shield: 7, swordsman: 7, spear: 6, archer: 7, catapult: 3, assassin: 5, mageLow: 5 } }, // 16
+  { units: [...BASE5, 'assassin', 'mageLow'], formation: { shield: 7, swordsman: 6, spear: 6, archer: 7, catapult: 4, assassin: 5, mageLow: 5 } }, // 17 — 투석 강화
+  { units: [...BASE5, 'mageMid', 'bomber'], formation: { shield: 7, swordsman: 6, spear: 6, archer: 6, catapult: 3, mageMid: 6, bomber: 6 }, unlocksUnit: 'mageMid' }, // 18
+  { units: [...BASE5, 'mageMid', 'bomber', 'assassin'], formation: { shield: 6, swordsman: 6, spear: 5, archer: 6, catapult: 3, mageMid: 5, bomber: 5, assassin: 4 } }, // 19
+  { units: [...BASE5, 'mageMid', 'bomber', 'assassin'], formation: { shield: 6, swordsman: 6, spear: 5, archer: 6, catapult: 3, mageMid: 5, bomber: 5, assassin: 4 } }, // 20 ⭐마법사 보스
+  // 21~30 팔라딘 시대 (총량 50)
+  { units: [...BASE5, 'mageMid', 'healer'], formation: { shield: 9, swordsman: 8, spear: 8, archer: 8, catapult: 4, mageMid: 7, healer: 6 }, unlocksUnit: 'healer' }, // 21
+  { units: [...BASE5, 'mageMid', 'healer', 'bomber'], formation: { shield: 8, swordsman: 7, spear: 7, archer: 7, catapult: 4, mageMid: 6, healer: 6, bomber: 5 } }, // 22
+  { units: [...BASE5, 'healer', 'assassin', 'bomber'], formation: { shield: 8, swordsman: 7, spear: 7, archer: 7, catapult: 4, healer: 6, assassin: 6, bomber: 5 } }, // 23
+  { units: [...BASE5, 'cavalry', 'healer'], formation: { shield: 9, swordsman: 8, spear: 8, archer: 8, catapult: 5, cavalry: 6, healer: 6 }, unlocksUnit: 'cavalry' }, // 24
   {
     units: [...BASE5, 'mageHigh', 'cavalry', 'healer'],
+    formation: { shield: 8, swordsman: 7, spear: 7, archer: 7, catapult: 4, mageHigh: 6, cavalry: 6, healer: 5 },
     miniBosses: ['knightMini'],
     unlocksUnit: 'mageHigh',
   }, // 25
-  { units: [...BASE5, 'mageHigh', 'cavalry', 'healer'], miniBosses: ['knightMini'] }, // 26
-  { units: [...BASE5, 'mageHigh', 'cavalry', 'bomber'], miniBosses: ['mageMini'] }, // 27
+  { units: [...BASE5, 'mageHigh', 'cavalry', 'healer'], formation: { shield: 8, swordsman: 7, spear: 7, archer: 7, catapult: 4, mageHigh: 6, cavalry: 6, healer: 5 }, miniBosses: ['knightMini'] }, // 26
+  { units: [...BASE5, 'mageHigh', 'cavalry', 'bomber'], formation: { shield: 8, swordsman: 7, spear: 6, archer: 7, catapult: 4, mageHigh: 6, cavalry: 6, bomber: 6 }, miniBosses: ['mageMini'] }, // 27
   {
     units: [...BASE5, 'mageHigh', 'assassin', 'bomber', 'healer', 'cavalry'],
+    formation: { shield: 7, swordsman: 6, spear: 6, archer: 6, catapult: 3, mageHigh: 5, assassin: 5, bomber: 4, healer: 4, cavalry: 4 },
     miniBosses: ['knightMini'],
   }, // 28
   {
     units: [...BASE5, 'mageHigh', 'assassin', 'bomber', 'healer', 'cavalry'],
+    formation: { shield: 6, swordsman: 6, spear: 6, archer: 6, catapult: 3, mageHigh: 5, assassin: 5, bomber: 4, healer: 5, cavalry: 4 },
     miniBosses: ['knightMini', 'mageMini'],
   }, // 29
   {
     units: [...BASE5, 'mageHigh', 'assassin', 'bomber', 'healer', 'cavalry'],
+    formation: { shield: 6, swordsman: 6, spear: 6, archer: 6, catapult: 3, mageHigh: 5, assassin: 5, bomber: 4, healer: 5, cavalry: 4 },
     miniBosses: ['knightMini', 'mageMini'],
     bossAppearances: [120, 360],
-  }, // 30 — 팔라딘 최종 보스
+  }, // 30 ⭐팔라딘 최종 보스
 ];
 
 /** 폭탄병 18 스테이지 클리어 시 해금 (mageMid 와 동시 등장 — 둘 다 해금) */
