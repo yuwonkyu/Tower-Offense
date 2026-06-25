@@ -143,12 +143,25 @@ export interface CardDef {
 
 export type StageDifficulty = 'normal' | 'hard';
 
+/** 타워(종족) 아트 키 — assets/game/tower/<TowerRace>.png 와 1:1 매핑 */
+export type TowerRace =
+  | 'Human'
+  | 'Demon'
+  | 'Elf'
+  | 'Dwarf'
+  | 'Dragon'
+  | 'Beastkin'
+  | 'Giant'
+  | 'Celestial';
+
 export interface StageConfig {
   stage: number;
   difficulty: StageDifficulty;
   /** 제한 시간 (초) — 10분 */
   timeLimit: number;
   tower: { hp: number; def: number };
+  /** 타워 종족 아트 (미설정 = 'Human'). 8종족 확장 시 스테이지가 종족 지정 */
+  race?: TowerRace;
   enemyHero: EnemyHeroId;
   /** 등장 적 유닛 풀 */
   enemyUnits: UnitId[];

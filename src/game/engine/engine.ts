@@ -70,7 +70,7 @@ export function makeFieldLayout(aspectRatio: number): FieldLayout {
     towerX: width / 2,
     // 타워는 **항상 화면 정중앙 고정** — 절대 옮기지 않는다(피드백). 정렬은 맵을 타워에 맞춘다:
     // 배경 PNG의 클리어링(수렴점)을 scripts/centerFieldImage.js로 이미지 정중앙에 크롭 → cover 중앙정렬로 일치.
-    towerY: height * 0.46,
+    towerY: height * 0.4,
     towerRadius: 11,
     heroX: width / 2,
     heroY: height * 0.74,

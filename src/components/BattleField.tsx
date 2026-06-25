@@ -9,6 +9,7 @@
  * (렌더 중 engineRef/paintCache ref를 의도적으로 읽어 매 프레임 최신 상태를 그린다.)
  */
 import {
+  BlendMode,
   Canvas,
   createPicture,
   PaintStyle,
@@ -22,6 +23,15 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 // 전장 배경 — 인간 종족 필드 (스1~30). 8종족 확장 시 field_<race>.png 추가
 import FIELD_BG from '@/assets/game/field/field_human.png';
+// 종족별 타워 아트 (2.5D 항공샷, 500×500 RGBA, 원형 바닥 포함)
+import TOWER_BEASTKIN from '@/assets/game/tower/Beastkin.png';
+import TOWER_CELESTIAL from '@/assets/game/tower/Celestial.png';
+import TOWER_DEMON from '@/assets/game/tower/Demon.png';
+import TOWER_DRAGON from '@/assets/game/tower/Dragon.png';
+import TOWER_DWARF from '@/assets/game/tower/Dwarf.png';
+import TOWER_ELF from '@/assets/game/tower/Elf.png';
+import TOWER_GIANT from '@/assets/game/tower/Giant.png';
+import TOWER_HUMAN from '@/assets/game/tower/Human.png';
 import {
   BattleEngine,
   isStructure,
@@ -29,8 +39,28 @@ import {
   type CombatEntity,
   type EntityKind,
 } from '@/game/engine/engine';
-import type { HeroDef, StageConfig } from '@/game/types';
+import type { HeroDef, StageConfig, TowerRace } from '@/game/types';
 import { useProgressStore } from '@/store/progressStore';
+
+/** 종족 → 타워 PNG(asset id) 매핑. config.race로 선택, 미설정 시 Human */
+const TOWER_ART: Record<TowerRace, number> = {
+  Human: TOWER_HUMAN,
+  Demon: TOWER_DEMON,
+  Elf: TOWER_ELF,
+  Dwarf: TOWER_DWARF,
+  Dragon: TOWER_DRAGON,
+  Beastkin: TOWER_BEASTKIN,
+  Giant: TOWER_GIANT,
+  Celestial: TOWER_CELESTIAL,
+};
+
+// ── 타워 아트 배치 보정 (8종 공통 — 500×500 동일 프레이밍 가정, 인게임 보고 미세조정) ──
+/** 원형 단상 rim이 도달할 논리 반경(필드 단위). 배경 클리어링을 채우도록 keep-out(17)보다 크게 */
+const TOWER_ART_RADIUS_UNITS = 24;
+/** 이미지 폭 대비 단상(타원) 반폭 비율 — 이 부분이 위 반경에 매핑됨 */
+const TOWER_ART_PLATFORM_HALFW = 0.46;
+/** 이미지 높이 대비 단상 중심의 세로 위치 — 이 지점이 타워 논리좌표(tx,ty)에 정렬됨 */
+const TOWER_ART_ANCHOR_Y = 0.72;
 
 /** 프로토타입 엔티티 표현: 원형 + 종류별 색상 (설계 01) */
 const UNIT_VISUALS: Record<EntityKind, { color: string; radius: number }> = {
@@ -99,6 +129,8 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
   const paintCache = useRef<Map<string, SkPaint>>(new Map());
   // 전장 배경 이미지 (로드 전 null) — cover는 Skia에서 직접 계산해 그린다
   const bgImage = useImage(FIELD_BG);
+  // 종족별 타워 아트 (로드 전 null → 절차적 폴백). config.race 변경 시 자동 재로드
+  const towerImage = useImage(TOWER_ART[config.race ?? 'Human']);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -227,29 +259,59 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
     }
     // 지형/지면은 PNG가 담당. 성 밑 흙은 추후 "바닥타일 포함 타워 에셋"으로 대체
 
-    // ── 적 타워: 상단 요새 (4단계 손상 외관) ──
+    // ── 적 타워: 종족 PNG 아트 (2.5D 항공샷, 바닥 단상 포함) — 로드 전/실패 시 절차적 폴백 ──
     const dmgStage = towerPct > 0.6 ? 0 : towerPct > 0.3 ? 1 : towerPct > 0 ? 2 : 3;
-    const wallCol = dmgStage >= 2 ? '#5a5550' : '#777067';
-    canvas.drawCircle(tx, ty + tr * 0.14, tr * 1.2, fill('rgba(0,0,0,0.4)')); // 토대 그림자
-    canvas.drawCircle(tx, ty, tr, fill('#393530')); // 외벽 채움
-    canvas.drawCircle(tx, ty, tr, stroke(wallCol, 2.4)); // 외벽 링
-    // 흉벽(크레넬) — 손상 단계별 일부 결손
-    const merlons = 12;
-    for (let i = 0; i < merlons; i++) {
-      if (dmgStage === 1 && i % 5 === 0) continue;
-      if (dmgStage === 2 && i % 2 === 0) continue;
-      if (dmgStage === 3 && i % 3 !== 0) continue;
-      const a = (i / merlons) * Math.PI * 2;
-      canvas.drawCircle(tx + Math.cos(a) * tr, ty + Math.sin(a) * tr, tr * 0.17, fill(wallCol));
+    if (towerImage) {
+      const iw = towerImage.width();
+      const ih = towerImage.height();
+      // 단상 반폭(이미지 비율)을 keep-out 반경에 매핑 → 8종 화면 크기 일관
+      const drawScale = (TOWER_ART_RADIUS_UNITS * scale) / (TOWER_ART_PLATFORM_HALFW * iw);
+      const dw = iw * drawScale;
+      const dh = ih * drawScale;
+      const dx = tx - dw / 2; // 가로 중앙 정렬
+      const dy = ty - TOWER_ART_ANCHOR_Y * dh; // 단상 중심을 타워 논리좌표(tx,ty)에 정렬
+      const src = Skia.XYWHRect(0, 0, iw, ih);
+      const dst = Skia.XYWHRect(dx, dy, dw, dh);
+      canvas.drawImageRect(towerImage, src, dst, fill('rgba(0,0,0,1)')); // 색 무시 (이미지 드로잉용)
+      // 저체력 손상 틴트 — HP 낮을수록 타워(불투명 픽셀)가 붉고 어둑하게
+      const dmg = 1 - towerPct;
+      if (dmg > 0.45) {
+        const tintP = Skia.Paint();
+        tintP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(120,24,12)'), BlendMode.SrcATop));
+        tintP.setAlphaf(Math.min(0.4, (dmg - 0.45) * 0.7));
+        canvas.drawImageRect(towerImage, src, dst, tintP);
+      }
+      // 피격 플래시 — 타워 전체 붉은 번쩍 (타격감)
+      if (engine.towerFlash > 0) {
+        const flashP = Skia.Paint();
+        flashP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(255,90,90)'), BlendMode.SrcATop));
+        flashP.setAlphaf(0.5);
+        canvas.drawImageRect(towerImage, src, dst, flashP);
+      }
+    } else {
+      // 절차적 폴백 (상단 요새, 4단계 손상 외관) — 에셋 로드 전 한순간만 노출
+      const wallCol = dmgStage >= 2 ? '#5a5550' : '#777067';
+      canvas.drawCircle(tx, ty + tr * 0.14, tr * 1.2, fill('rgba(0,0,0,0.4)')); // 토대 그림자
+      canvas.drawCircle(tx, ty, tr, fill('#393530')); // 외벽 채움
+      canvas.drawCircle(tx, ty, tr, stroke(wallCol, 2.4)); // 외벽 링
+      // 흉벽(크레넬) — 손상 단계별 일부 결손
+      const merlons = 12;
+      for (let i = 0; i < merlons; i++) {
+        if (dmgStage === 1 && i % 5 === 0) continue;
+        if (dmgStage === 2 && i % 2 === 0) continue;
+        if (dmgStage === 3 && i % 3 !== 0) continue;
+        const a = (i / merlons) * Math.PI * 2;
+        canvas.drawCircle(tx + Math.cos(a) * tr, ty + Math.sin(a) * tr, tr * 0.17, fill(wallCol));
+      }
+      canvas.drawCircle(tx, ty, tr * 0.6, fill(dmgStage >= 2 ? '#2a2622' : '#48433c')); // 안뜰
+      canvas.drawCircle(tx, ty, tr * 0.34, fill(dmgStage >= 3 ? '#7a2a1a' : towerColor)); // 중앙 키프 (HP 색)
+      if (dmgStage >= 2) {
+        canvas.drawCircle(tx - tr * 0.42, ty + tr * 0.32, tr * 0.12, fill('#2a2622')); // 잔해
+        canvas.drawCircle(tx + tr * 0.5, ty - tr * 0.22, tr * 0.09, fill('#2a2622'));
+      }
+      if (dmgStage === 3) canvas.drawCircle(tx, ty, tr * 0.5, fill('rgba(255,80,40,0.28)')); // 폐허 잔불
+      if (engine.towerFlash > 0) canvas.drawCircle(tx, ty, tr * 1.06, fill('rgba(255,90,90,0.45)')); // 피격 플래시
     }
-    canvas.drawCircle(tx, ty, tr * 0.6, fill(dmgStage >= 2 ? '#2a2622' : '#48433c')); // 안뜰
-    canvas.drawCircle(tx, ty, tr * 0.34, fill(dmgStage >= 3 ? '#7a2a1a' : towerColor)); // 중앙 키프 (HP 색)
-    if (dmgStage >= 2) {
-      canvas.drawCircle(tx - tr * 0.42, ty + tr * 0.32, tr * 0.12, fill('#2a2622')); // 잔해
-      canvas.drawCircle(tx + tr * 0.5, ty - tr * 0.22, tr * 0.09, fill('#2a2622'));
-    }
-    if (dmgStage === 3) canvas.drawCircle(tx, ty, tr * 0.5, fill('rgba(255,80,40,0.28)')); // 폐허 잔불
-    if (engine.towerFlash > 0) canvas.drawCircle(tx, ty, tr * 1.06, fill('rgba(255,90,90,0.45)')); // 피격 플래시
 
     // 구조물: 성벽/바리케이트/트랩
     for (const e of structures) {
