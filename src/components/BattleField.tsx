@@ -23,6 +23,27 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 // 전장 배경 — 인간 종족 필드 (스1~30). 8종족 확장 시 field_<race>.png 추가
 import FIELD_BG from '@/assets/game/field/field_human.png';
+// 구조물 스프라이트
+import STRUCT_HUMAN_BARRICADE from '@/assets/game/units/Human_barricade.png';
+import STRUCT_HUMAN_TRAP from '@/assets/game/units/Human_trap.png';
+import STRUCT_HUMAN_WALL from '@/assets/game/units/Human_wall.png';
+// 유닛 스프라이트 — assets/game/units/{Race}_{unitId}.png
+import UNIT_HUMAN_ARCHER from '@/assets/game/units/Human_Archer.png';
+import UNIT_HUMAN_ASSASSIN from '@/assets/game/units/Human_assassin.png';
+import UNIT_HUMAN_BOMBER from '@/assets/game/units/Human_bomber.png';
+import UNIT_HUMAN_CATAPULT from '@/assets/game/units/Human_catapult.png';
+import UNIT_HUMAN_CAVALRY from '@/assets/game/units/Human_cavalry.png';
+import UNIT_HUMAN_HEALER from '@/assets/game/units/Human_healer.png';
+import UNIT_HUMAN_KNIGHTMINI from '@/assets/game/units/Human_knightMini.png';
+import UNIT_HUMAN_MAGEHIGH from '@/assets/game/units/Human_mageHigh.png';
+import UNIT_HUMAN_MAGELOW from '@/assets/game/units/Human_mageLow.png';
+import UNIT_HUMAN_MAGEMID from '@/assets/game/units/Human_mageMid.png';
+import UNIT_HUMAN_MAGEMINI from '@/assets/game/units/Human_mageMini.png';
+import UNIT_HUMAN_PALADINBOSS from '@/assets/game/units/Human_paladinBoss.png';
+import UNIT_HUMAN_SHIELD from '@/assets/game/units/Human_shield.png';
+import UNIT_HUMAN_SPEAR from '@/assets/game/units/Human_spear.png';
+import UNIT_HUMAN_SWORDSMAN from '@/assets/game/units/Human_swordsman.png';
+
 // 종족별 타워 아트 (2.5D 항공샷, 500×500 RGBA, 원형 바닥 포함)
 import TOWER_BEASTKIN from '@/assets/game/tower/Beastkin.png';
 import TOWER_CELESTIAL from '@/assets/game/tower/Celestial.png';
@@ -101,6 +122,13 @@ const HIT_COLOR = 'rgba(255,255,255,0.95)';
 /** 배경 맵을 타워 위치에 맞춰 그릴 때 cover보다 살짝 확대 — 타워가 중앙에서 벗어나도 클리어링이 따라올 여유 */
 const BG_ZOOM = 1.15;
 
+/**
+ * 유닛 스프라이트 크기 배수 — 충돌 반경(논리값) 대비 화면 표시 크기.
+ * 충돌 반경 자체는 너무 작아 보이지 않으므로 크게 키워 캐릭터가 읽히게 한다.
+ * 인게임 보고 조정: 너무 크면 ↓, 겹쳐 보이면 ↓
+ */
+const UNIT_SPRITE_SCALE = 1.5;
+
 
 /** 영웅 클래스 테마 색 (오라/본체/테두리) — Phase1 절차적 디자인 */
 const HERO_THEME: Record<string, { body: string; aura: string; ring: string }> = {
@@ -131,6 +159,49 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
   const bgImage = useImage(FIELD_BG);
   // 종족별 타워 아트 (로드 전 null → 절차적 폴백). config.race 변경 시 자동 재로드
   const towerImage = useImage(TOWER_ART[config.race ?? 'Human']);
+  // 구조물 스프라이트
+  const imgWall       = useImage(STRUCT_HUMAN_WALL);
+  const imgBarricade  = useImage(STRUCT_HUMAN_BARRICADE);
+  const imgTrap       = useImage(STRUCT_HUMAN_TRAP);
+  const structImageMap: Partial<Record<EntityKind, ReturnType<typeof useImage>>> = {
+    wall:      imgWall,
+    barricade: imgBarricade,
+    trap:      imgTrap,
+  };
+  // 유닛 스프라이트 — useImage는 훅이므로 최상위에서 모두 호출
+  const imgArcher     = useImage(UNIT_HUMAN_ARCHER);
+  const imgAssassin   = useImage(UNIT_HUMAN_ASSASSIN);
+  const imgBomber     = useImage(UNIT_HUMAN_BOMBER);
+  const imgCatapult   = useImage(UNIT_HUMAN_CATAPULT);
+  const imgCavalry    = useImage(UNIT_HUMAN_CAVALRY);
+  const imgHealer     = useImage(UNIT_HUMAN_HEALER);
+  const imgKnightMini = useImage(UNIT_HUMAN_KNIGHTMINI);
+  const imgMageHigh   = useImage(UNIT_HUMAN_MAGEHIGH);
+  const imgMageLow    = useImage(UNIT_HUMAN_MAGELOW);
+  const imgMageMid    = useImage(UNIT_HUMAN_MAGEMID);
+  const imgMageMini   = useImage(UNIT_HUMAN_MAGEMINI);
+  const imgPaladin    = useImage(UNIT_HUMAN_PALADINBOSS);
+  const imgShield     = useImage(UNIT_HUMAN_SHIELD);
+  const imgSpear      = useImage(UNIT_HUMAN_SPEAR);
+  const imgSwordsman  = useImage(UNIT_HUMAN_SWORDSMAN);
+  // 유닛 종류 → 스프라이트 맵 (종족 추가 시 여기만 확장)
+  const unitImageMap: Partial<Record<EntityKind, ReturnType<typeof useImage>>> = {
+    archer:     imgArcher,
+    assassin:   imgAssassin,
+    bomber:     imgBomber,
+    catapult:   imgCatapult,
+    cavalry:    imgCavalry,
+    healer:     imgHealer,
+    knightMini: imgKnightMini,
+    mageHigh:   imgMageHigh,
+    mageLow:    imgMageLow,
+    mageMid:    imgMageMid,
+    mageMini:   imgMageMini,
+    paladinBoss: imgPaladin,
+    shield:     imgShield,
+    spear:      imgSpear,
+    swordsman:  imgSwordsman,
+  };
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -313,32 +384,62 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       if (engine.towerFlash > 0) canvas.drawCircle(tx, ty, tr * 1.06, fill('rgba(255,90,90,0.45)')); // 피격 플래시
     }
 
-    // 구조물: 성벽/바리케이트/트랩
+    // 구조물: 성벽/바리케이트/트랩 — 스프라이트 있으면 이미지, 없으면 원형
     for (const e of structures) {
       const v = UNIT_VISUALS[e.kind];
-      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, fill(v.color));
+      const ex = e.x * scale;
+      const ey = e.y * scale;
+      const img = structImageMap[e.kind as keyof typeof structImageMap];
+      if (img) {
+        const hw = v.radius * scale * UNIT_SPRITE_SCALE;
+        canvas.drawImageRect(img,
+          Skia.XYWHRect(0, 0, img.width(), img.height()),
+          Skia.XYWHRect(ex - hw, ey - hw, hw * 2, hw * 2),
+          fill('rgba(0,0,0,1)'),
+        );
+      } else {
+        canvas.drawCircle(ex, ey, v.radius * scale, fill(v.color));
+      }
     }
+
+    // ── 유닛 드로잉 헬퍼 ──
+    // 스프라이트가 있으면 이미지, 없으면 원형 폴백. 팀 색 링은 항상 위에 오버레이.
+    const drawUnit = (e: CombatEntity, teamStroke: string, isEnemy: boolean) => {
+      const v = UNIT_VISUALS[e.kind];
+      const ex = e.x * scale;
+      const ey = e.y * scale;
+      const r = v.radius * scale;
+      const img = unitImageMap[e.kind as keyof typeof unitImageMap];
+      if (img) {
+        const hw = r * UNIT_SPRITE_SCALE;
+        const src = Skia.XYWHRect(0, 0, img.width(), img.height());
+        const dst = Skia.XYWHRect(ex - hw, ey - hw, hw * 2, hw * 2);
+        if (e.hitFlash > 0) {
+          // 피격 번쩍 — 흰색 틴트 (팀 틴트보다 우선)
+          const hitP = Skia.Paint();
+          hitP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(255,255,255)'), BlendMode.SrcATop));
+          hitP.setAlphaf(0.7);
+          canvas.drawImageRect(img, src, dst, fill('rgba(0,0,0,1)'));
+          canvas.drawImageRect(img, src, dst, hitP);
+        } else {
+          canvas.drawImageRect(img, src, dst, fill('rgba(0,0,0,1)'));
+          // 적군: 10% 붉은 틴트 — 투명 픽셀은 건드리지 않고 스프라이트 위만 물듦
+          if (isEnemy) {
+            const redP = Skia.Paint();
+            redP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(220,40,40)'), BlendMode.SrcATop));
+            redP.setAlphaf(0.10);
+            canvas.drawImageRect(img, src, dst, redP);
+          }
+        }
+        // 팀 구분 링 제거 — 스프라이트 자체로 구분
+      }
+      // 스프라이트 없는 유닛은 표시 안 함 (미구현 종족 추가 전까지 비어있음)
+    };
 
     // 적 유닛
-    for (const e of enemies) {
-      const v = UNIT_VISUALS[e.kind];
-      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, fill(e.hitFlash > 0 ? HIT_COLOR : v.color));
-    }
-    // 적 유닛 빨강 테두리 — 아군(시안)과 즉시 구분 (프로토타입 가독성, 피드백)
-    for (const e of enemies) {
-      const v = UNIT_VISUALS[e.kind];
-      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, stroke(ENEMY_STROKE, 1.2));
-    }
-
-    // 아군 유닛 (채움 + 시안 테두리)
-    for (const e of allies) {
-      const v = UNIT_VISUALS[e.kind];
-      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, fill(e.hitFlash > 0 ? HIT_COLOR : v.color));
-    }
-    for (const e of allies) {
-      const v = UNIT_VISUALS[e.kind];
-      canvas.drawCircle(e.x * scale, e.y * scale, v.radius * scale, stroke(ALLY_STROKE, 1.2));
-    }
+    for (const e of enemies) drawUnit(e, ENEMY_STROKE, true);
+    // 아군 유닛
+    for (const e of allies) drawUnit(e, ALLY_STROKE, false);
 
     // 투사체 — 투석탄(주황 글로우) / 영웅 화살(시안 글로우 + 비행 잔상, 호밍)
     for (const p of engine.projectiles) {

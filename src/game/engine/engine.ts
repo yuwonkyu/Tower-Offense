@@ -721,9 +721,13 @@ export class BattleEngine {
       this.timeExpAcc -= 1;
       this.gainExp(1);
     }
-    if (this.deployMode)
-      this.reinforceFormation(dt); // 배치형: 연속 스폰 X, 보충만
-    else this.spawnEnemies(dt);
+    if (this.deployMode) {
+      this.reinforceFormation(dt); // 배치형: 초기 진형 + 손실 보충
+      // 6스테이지부터 배치 + 연속 스폰 병행 — 진형이 가득 차도 추가 압박 지속
+      if (this.config.stage >= 6) this.spawnEnemies(dt);
+    } else {
+      this.spawnEnemies(dt);
+    }
     this.spawnAllies(dt);
     this.updateMiniBosses(dt);
     this.updateBossAppearances();
