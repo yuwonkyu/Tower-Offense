@@ -1574,7 +1574,8 @@ export class BattleEngine {
 
       let score: number;
       if (e.kind === "catapult") {
-        if (dist < CATAPULT_MIN_RANGE) continue; // 최소 사거리 — 가까운 적은 타격 안 함
+        // 사거리 밴드 [최소, 실사거리] 안의 적만 — 밖의 먼 적을 고르면 닿지 못해 영영 못 쏨(버그)
+        if (dist < CATAPULT_MIN_RANGE || dist > e.range) continue;
         score = -dist; // 공성 무기 — 사거리 끝의 먼 적 우선
       } else {
         score = dist;
