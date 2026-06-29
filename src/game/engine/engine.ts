@@ -2578,11 +2578,11 @@ export class BattleEngine {
   // ── 분산 / 정리 ────────────────────────────────────────
 
   /**
-   * 아군 유닛 뭉침 방지 (피드백 1·9): 가까운 아군끼리 서로 밀어냄.
+   * 유닛 뭉침 방지 (피드백 1·9): 가까운 같은 편끼리 서로 밀어냄 — 아군·적 동일 적용.
    * 영웅/구조물/폭탄병 제외 (폭탄병은 돌진해 자폭해야 하므로 밀어내면 타깃 도달 실패).
-   * 원거리 화력 과집중·공성 광역 취약 완화.
-   * 적은 분산 미적용 — 역방향 타워디펜스 특성상 적을 흩뜨리면 방어선이 얇게 퍼져
-   * 아군이 뚫지 못함(시뮬: 스20 75%→20%). 시각적 적 뭉침은 렌더 단계에서 처리.
+   * 같은 편끼리만 분산 (적·아군 교차 분산 X — 교전 접근 방해 방지).
+   * 30초(SEPARATION_GRACE) 지난 유닛은 분산 제외 → 적 방어선은 시간 지나며 다시 뭉쳐 두꺼워짐
+   * (역방향 타워디펜스 특성 유지: 갓 스폰된 유닛만 겹침 방지, 노병은 라인 형성).
    */
   private applySeparation() {
     const entities = this.entities;
@@ -2592,7 +2592,6 @@ export class BattleEngine {
       const a = entities[i];
       if (
         a.state === "dead" ||
-        a.side !== "ally" ||
         a.kind === "hero" ||
         a.kind === "bomber" ||
         isStructure(a.kind) ||
@@ -2603,7 +2602,7 @@ export class BattleEngine {
         const b = entities[j];
         if (
           b.state === "dead" ||
-          b.side !== "ally" ||
+          b.side !== a.side || // 같은 편끼리만 분산
           b.kind === "hero" ||
           b.kind === "bomber" ||
           isStructure(b.kind) ||

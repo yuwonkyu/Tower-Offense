@@ -133,7 +133,7 @@ const ENEMY_STROKE = 'rgba(255,70,70,0.95)'; // 적 유닛 빨강 테두리 — 
 
 // 진영 식별: 유닛 발밑 타원 디스크 — 같은 스프라이트를 써도 팀이 즉시 구분됨 (top-down RTS 표준)
 const ALLY_BASE = 'rgba(60,150,255,0.55)'; // 아군 발밑 — 파랑
-const ENEMY_BASE = 'rgba(235,45,45,0.6)'; // 적 발밑 — 빨강
+const ENEMY_BASE = 'rgba(235,45,45,0.42)'; // 적 발밑 — 빨강 (옅게)
 
 /** 피격 순간 번쩍 (타격감) */
 const HIT_COLOR = 'rgba(255,255,255,0.95)';
