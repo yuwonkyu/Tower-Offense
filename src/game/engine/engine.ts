@@ -335,6 +335,8 @@ export interface Tracer {
   life: number;
   maxLife: number;
   color: string;
+  /** 발사 유닛 종류 — 렌더가 화살/마법탄 등급별 비주얼을 선택 */
+  kind: EntityKind;
 }
 
 /** 적 영웅 스킬 예약 타격 — 텔레그래프(경고) 후 delay 경과 시 광역 피해 발동 */
@@ -765,10 +767,24 @@ export class BattleEngine {
 
   /** 활/마법 즉시타격 시 발사 위치→타깃으로 짧은 시각 트레이서 (피드백 3) */
   private spawnTracer(attacker: CombatEntity, tx: number, ty: number) {
-    const color =
-      attacker.kind === "archer"
-        ? "rgba(225,235,255,0.95)"
-        : "rgba(190,130,245,0.95)";
+    // 등급별 색 — 마법사 하/중/상이 시각적으로 구분되도록 (피드백)
+    let color: string;
+    switch (attacker.kind) {
+      case "archer":
+        color = "rgba(225,235,255,0.95)";
+        break;
+      case "mageLow":
+        color = "rgba(205,170,252,0.97)";
+        break; // 연보라
+      case "mageMid":
+        color = "rgba(168,98,240,0.97)";
+        break; // 보라
+      case "mageHigh":
+        color = "rgba(128,62,232,0.98)";
+        break; // 짙은 인디고
+      default:
+        color = "rgba(190,130,245,0.95)";
+    }
     this.tracers.push({
       id: this.nextId++,
       fromX: attacker.x,
@@ -778,6 +794,7 @@ export class BattleEngine {
       life: 0.13,
       maxLife: 0.13,
       color,
+      kind: attacker.kind,
     });
   }
 

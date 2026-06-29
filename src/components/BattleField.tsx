@@ -118,6 +118,13 @@ const UNIT_VISUALS: Record<EntityKind, { color: string; radius: number }> = {
 
 const PROJECTILE_COLOR = 'rgba(255,236,180,1)'; // 본체 (밝게)
 const PROJECTILE_GLOW = 'rgba(255,160,70,0.4)'; // 외곽 글로우 (불타는 공성탄 느낌, 가시성↑)
+
+// 마법사 등급별 투사체(트레이서) 비주얼 — 헤일로 글로우 + 코어 + 반경. 하→중→상 점점 짙고 큼
+const MAGE_TRACER: Partial<Record<EntityKind, { glow: string; core: string; bright: string; r: number }>> = {
+  mageLow:  { glow: 'rgba(180,135,250,0.40)', core: 'rgba(205,170,252,1)', bright: 'rgba(245,235,255,0.95)', r: 3.0 },
+  mageMid:  { glow: 'rgba(150,80,238,0.46)',  core: 'rgba(178,108,244,1)', bright: 'rgba(240,225,255,0.95)', r: 3.5 },
+  mageHigh: { glow: 'rgba(120,55,232,0.52)',  core: 'rgba(150,90,250,1)',  bright: 'rgba(235,220,255,0.98)', r: 4.0 },
+};
 const ARROW_COLOR = 'rgba(205,240,255,1)'; // 영웅 화살 본체 (시안빛 — 투석탄과 구분)
 const ARROW_GLOW = 'rgba(95,185,255,0.45)'; // 영웅 화살 글로우 + 비행 잔상
 
@@ -456,13 +463,16 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
           canvas.drawImageRect(img, src, dst, hitP);
         } else {
           canvas.drawImageRect(img, src, dst, fill('rgba(0,0,0,1)'));
-          // 적군: 붉은 틴트 강화 — 투명 픽셀은 건드리지 않고 스프라이트 위만 물듦 (베이스 디스크와 함께 진영 구분)
-          if (isEnemy) {
-            const redP = Skia.Paint();
-            redP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(225,40,40)'), BlendMode.SrcATop));
-            redP.setAlphaf(0.24);
-            canvas.drawImageRect(img, src, dst, redP);
-          }
+          // 진영 틴트 — 적군 붉은색 / 아군 푸른색 (투명 픽셀은 건드리지 않고 스프라이트 위만 물듦, 베이스 디스크와 함께 구분)
+          const tintP = Skia.Paint();
+          tintP.setColorFilter(
+            Skia.ColorFilter.MakeBlend(
+              Skia.Color(isEnemy ? 'rgb(225,40,40)' : 'rgb(55,135,255)'),
+              BlendMode.SrcATop,
+            ),
+          );
+          tintP.setAlphaf(isEnemy ? 0.24 : 0.18);
+          canvas.drawImageRect(img, src, dst, tintP);
         }
       }
       // 스프라이트 없는 유닛은 표시 안 함 (미구현 종족 추가 전까지 비어있음)
@@ -522,11 +532,43 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
     }
 
     // 트레이서 (활/마법 즉시타격 시각 — 발사점→타깃 보간 이동)
+    // 활병 = 화살 스프라이트(방향 회전), 마법사 = 등급별 발광 마법탄(글로우+코어), 그 외 = 점
     for (const t of engine.tracers) {
       const tp = 1 - t.life / t.maxLife;
-      const tx = t.fromX + (t.tx - t.fromX) * tp;
-      const ty = t.fromY + (t.ty - t.fromY) * tp;
-      canvas.drawCircle(tx * scale, ty * scale, 1.0 * scale, fill(t.color));
+      const px = (t.fromX + (t.tx - t.fromX) * tp) * scale;
+      const py = (t.fromY + (t.ty - t.fromY) * tp) * scale;
+      const tdx = t.tx - t.fromX;
+      const tdy = t.ty - t.fromY;
+
+      if (t.kind === 'archer' && imgArcherArrow) {
+        const ang = Math.atan2(tdy, tdx) * (180 / Math.PI);
+        const hw = 3.2 * scale;
+        canvas.save();
+        canvas.rotate(ang, px, py);
+        canvas.drawImageRect(
+          imgArcherArrow,
+          Skia.XYWHRect(0, 0, imgArcherArrow.width(), imgArcherArrow.height()),
+          Skia.XYWHRect(px - hw, py - hw * 0.4, hw * 2, hw * 0.8),
+          fill('rgba(0,0,0,1)'),
+        );
+        canvas.restore();
+        continue;
+      }
+
+      const mv = MAGE_TRACER[t.kind];
+      if (mv) {
+        // 꼬리 잔상 — 진행 반대 방향으로 작은 글로우 2개 (마법탄 비행감)
+        const len = Math.hypot(tdx, tdy) || 1;
+        const ux = tdx / len;
+        const uy = tdy / len;
+        canvas.drawCircle(px - ux * 2.2 * scale, py - uy * 2.2 * scale, mv.r * 0.5 * scale, fill(mv.glow));
+        canvas.drawCircle(px, py, mv.r * scale, fill(mv.glow));        // 헤일로
+        canvas.drawCircle(px, py, mv.r * 0.5 * scale, fill(mv.core));  // 코어
+        canvas.drawCircle(px, py, mv.r * 0.22 * scale, fill(mv.bright)); // 중심 하이라이트
+        continue;
+      }
+
+      canvas.drawCircle(px, py, 1.0 * scale, fill(t.color));
     }
 
     // 스킬/광역 연출 — 경고(텔레그래프)는 고정 반경 위험존, 타격은 퍼지는 링
