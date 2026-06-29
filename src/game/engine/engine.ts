@@ -2537,17 +2537,13 @@ export class BattleEngine {
   /** 폭탄병: 가장 가까운 상대에게 접근 후 자폭 (자폭 시 EXP 50%) */
   private actBomber(e: CombatEntity, dt: number) {
     const { towerX, towerY, towerRadius } = this.field;
+    // 폭탄병은 1회용 자폭 유닛 — 방어 반경(ENEMY_DEFEND_RADIUS) 게이트 미적용.
+    // (게이트가 있으면 적 폭탄병이 추격 중 타깃이 반경을 넘나들 때 타깃을 놓쳐
+    //  경계에서 요요처럼 왕복하며 영영 안 터지는 버그 발생 — 가장 가까운 상대로 직진·자폭)
     let nearest: CombatEntity | null = null;
     let nearestDist = Infinity;
     for (const c of this.entities) {
       if (c.side === e.side || c.state === "dead") continue;
-      // 적 폭탄병도 방어 태세 — 방어 반경 밖 아군은 무시
-      if (
-        e.side === "enemy" &&
-        Math.hypot(c.x - towerX, c.y - towerY) > ENEMY_DEFEND_RADIUS
-      ) {
-        continue;
-      }
       const dist = Math.hypot(c.x - e.x, c.y - e.y);
       if (dist < nearestDist) {
         nearestDist = dist;
