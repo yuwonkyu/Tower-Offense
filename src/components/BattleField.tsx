@@ -43,6 +43,14 @@ import UNIT_HUMAN_PALADINBOSS from '@/assets/game/units/Human_paladinBoss.png';
 import UNIT_HUMAN_SHIELD from '@/assets/game/units/Human_shield.png';
 import UNIT_HUMAN_SPEAR from '@/assets/game/units/Human_spear.png';
 import UNIT_HUMAN_SWORDSMAN from '@/assets/game/units/Human_swordsman.png';
+// 영웅 스프라이트 — assets/game/units/hero_{id}.png
+import HERO_MARUHAN from '@/assets/game/units/hero_maruhan.png';
+import HERO_MIR from '@/assets/game/units/hero_mir.png';
+import HERO_NOEUL from '@/assets/game/units/hero_noeul.png';
+// 투사체 스프라이트 — assets/game/projectiles/
+import PROJ_ARCHER_ARROW from '@/assets/game/projectiles/archer_arrow.png';
+import PROJ_HERO_ARROW from '@/assets/game/projectiles/hero_arrow.png';
+import PROJ_STONE from '@/assets/game/projectiles/stone.png';
 
 // 종족별 타워 아트 (2.5D 항공샷, 500×500 RGBA, 원형 바닥 포함)
 import TOWER_BEASTKIN from '@/assets/game/tower/Beastkin.png';
@@ -184,6 +192,19 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
   const imgShield     = useImage(UNIT_HUMAN_SHIELD);
   const imgSpear      = useImage(UNIT_HUMAN_SPEAR);
   const imgSwordsman  = useImage(UNIT_HUMAN_SWORDSMAN);
+  // 영웅 스프라이트
+  const imgHeroMaruhan = useImage(HERO_MARUHAN);
+  const imgHeroMir     = useImage(HERO_MIR);
+  const imgHeroNoeul   = useImage(HERO_NOEUL);
+  const heroImageMap: Record<string, ReturnType<typeof useImage>> = {
+    maruhan: imgHeroMaruhan,
+    mir:     imgHeroMir,
+    noeul:   imgHeroNoeul,
+  };
+  // 투사체 스프라이트
+  const imgArcherArrow = useImage(PROJ_ARCHER_ARROW);
+  const imgHeroArrow   = useImage(PROJ_HERO_ARROW);
+  const imgStone       = useImage(PROJ_STONE);
   // 유닛 종류 → 스프라이트 맵 (종족 추가 시 여기만 확장)
   const unitImageMap: Partial<Record<EntityKind, ReturnType<typeof useImage>>> = {
     archer:     imgArcher,
@@ -441,24 +462,51 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
     // 아군 유닛
     for (const e of allies) drawUnit(e, ALLY_STROKE, false);
 
-    // 투사체 — 투석탄(주황 글로우) / 영웅 화살(시안 글로우 + 비행 잔상, 호밍)
+    // 투사체 — 스프라이트 있으면 이미지(회전), 없으면 원형 글로우 폴백
     for (const p of engine.projectiles) {
-      if (p.arrow) {
-        const dx = p.tx - p.x;
-        const dy = p.ty - p.y;
-        const d = Math.hypot(dx, dy) || 1;
-        const bx = (dx / d) * scale;
-        const by = (dy / d) * scale;
-        const px = p.x * scale;
-        const py = p.y * scale;
-        // 비행 방향 뒤쪽 잔상 2개 → 슈팅 스트릭
-        canvas.drawCircle(px - bx * 2.4, py - by * 2.4, 1.1 * scale, fill(ARROW_GLOW));
-        canvas.drawCircle(px - bx * 4.8, py - by * 4.8, 0.7 * scale, fill(ARROW_GLOW));
-        canvas.drawCircle(px, py, 3.2 * scale, fill(ARROW_GLOW));
-        canvas.drawCircle(px, py, 1.5 * scale, fill(ARROW_COLOR));
+      const dx = p.tx - p.x;
+      const dy = p.ty - p.y;
+      const angleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
+      const px = p.x * scale;
+      const py = p.y * scale;
+
+      if (p.arrow || p.archerArrow) {
+        // 영웅 화살(hero_arrow) vs 궁수 화살(archer_arrow)
+        const arrowImg = p.arrow ? imgHeroArrow : imgArcherArrow;
+        if (arrowImg) {
+          const hw = 3.5 * scale;
+          canvas.save();
+          canvas.rotate(angleDeg, px, py);
+          canvas.drawImageRect(
+            arrowImg,
+            Skia.XYWHRect(0, 0, arrowImg.width(), arrowImg.height()),
+            Skia.XYWHRect(px - hw, py - hw * 0.4, hw * 2, hw * 0.8),
+            fill('rgba(0,0,0,1)'),
+          );
+          canvas.restore();
+        } else {
+          // 폴백: 원형 글로우
+          const bx = (dx / (Math.hypot(dx, dy) || 1)) * scale;
+          const by = (dy / (Math.hypot(dx, dy) || 1)) * scale;
+          canvas.drawCircle(px - bx * 2.4, py - by * 2.4, 1.1 * scale, fill(ARROW_GLOW));
+          canvas.drawCircle(px - bx * 4.8, py - by * 4.8, 0.7 * scale, fill(ARROW_GLOW));
+          canvas.drawCircle(px, py, 3.2 * scale, fill(ARROW_GLOW));
+          canvas.drawCircle(px, py, 1.5 * scale, fill(ARROW_COLOR));
+        }
       } else {
-        canvas.drawCircle(p.x * scale, p.y * scale, 3.6 * scale, fill(PROJECTILE_GLOW));
-        canvas.drawCircle(p.x * scale, p.y * scale, 1.9 * scale, fill(PROJECTILE_COLOR));
+        // 투석탄
+        if (imgStone) {
+          const hw = 3.8 * scale;
+          canvas.drawImageRect(
+            imgStone,
+            Skia.XYWHRect(0, 0, imgStone.width(), imgStone.height()),
+            Skia.XYWHRect(px - hw, py - hw, hw * 2, hw * 2),
+            fill('rgba(0,0,0,1)'),
+          );
+        } else {
+          canvas.drawCircle(px, py, 3.6 * scale, fill(PROJECTILE_GLOW));
+          canvas.drawCircle(px, py, 1.9 * scale, fill(PROJECTILE_COLOR));
+        }
       }
     }
 
@@ -498,19 +546,45 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
       }
     }
 
-    // 아군 영웅 — 클래스 테마 오라 + 본체 + 표식
+    // 아군 영웅 — 스프라이트 있으면 이미지, 없으면 원형 폴백 (오라는 항상 표시)
     const theme = HERO_THEME[heroDef.id] ?? HERO_THEME.mir;
     const hx = hero.x * scale;
     const hy = hero.y * scale;
     const hr = engine.field.heroRadius * scale;
+    const heroImg = heroImageMap[heroDef.id] ?? null;
+    // 오라 (스프라이트 유무 관계없이 표시)
     if (!heroDead) {
-      canvas.drawCircle(hx, hy, hr * 2.3, fill(theme.aura)); // 외곽 오라
-      canvas.drawCircle(hx, hy, hr * 1.6, fill(theme.aura)); // 내곽 오라 (누적 → 밝아짐)
+      canvas.drawCircle(hx, hy, hr * 2.3, fill(theme.aura));
+      canvas.drawCircle(hx, hy, hr * 1.6, fill(theme.aura));
     }
-    const heroBody = heroDead ? 'rgba(120,120,140,0.5)' : hero.hitFlash > 0 ? HIT_COLOR : theme.body;
-    canvas.drawCircle(hx, hy, hr, fill(heroBody));
-    canvas.drawCircle(hx, hy, hr, stroke(heroDead ? 'rgba(150,150,170,0.5)' : theme.ring, 1.8));
-    if (!heroDead) canvas.drawCircle(hx, hy, hr * 0.42, fill('rgba(255,255,255,0.92)')); // 영웅 표식
+    if (heroImg) {
+      const hw = hr * 2.0; // 원형보다 살짝 크게 (캐릭터 실루엣이 충분히 보이도록)
+      const src = Skia.XYWHRect(0, 0, heroImg.width(), heroImg.height());
+      const dst = Skia.XYWHRect(hx - hw, hy - hw, hw * 2, hw * 2);
+      if (heroDead) {
+        // 사망: 반투명 회색 틴트
+        const deadP = Skia.Paint();
+        deadP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(120,120,140)'), BlendMode.SrcATop));
+        deadP.setAlphaf(0.6);
+        canvas.drawImageRect(heroImg, src, dst, fill('rgba(0,0,0,1)'));
+        canvas.drawImageRect(heroImg, src, dst, deadP);
+      } else if (hero.hitFlash > 0) {
+        // 피격 번쩍 — 흰색 틴트
+        const hitP = Skia.Paint();
+        hitP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(255,255,255)'), BlendMode.SrcATop));
+        hitP.setAlphaf(0.7);
+        canvas.drawImageRect(heroImg, src, dst, fill('rgba(0,0,0,1)'));
+        canvas.drawImageRect(heroImg, src, dst, hitP);
+      } else {
+        canvas.drawImageRect(heroImg, src, dst, fill('rgba(0,0,0,1)'));
+      }
+    } else {
+      // 폴백: 원형
+      const heroBody = heroDead ? 'rgba(120,120,140,0.5)' : hero.hitFlash > 0 ? HIT_COLOR : theme.body;
+      canvas.drawCircle(hx, hy, hr, fill(heroBody));
+      canvas.drawCircle(hx, hy, hr, stroke(heroDead ? 'rgba(150,150,170,0.5)' : theme.ring, 1.8));
+      if (!heroDead) canvas.drawCircle(hx, hy, hr * 0.42, fill('rgba(255,255,255,0.92)'));
+    }
   });
 
   return (

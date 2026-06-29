@@ -306,8 +306,10 @@ export interface Projectile {
   targetTower: boolean;
   /** 호밍 대상 id — 설정 시 매 틱 타깃 위치 추적 (영웅 화살: 항상 명중) */
   homingId?: number;
-  /** 영웅 화살 비주얼 플래그 (구분된 색 + 비행 잔상) */
+  /** 영웅 화살 비주얼 플래그 */
   arrow?: boolean;
+  /** 궁수 화살 비주얼 플래그 (영웅 화살과 구분) */
+  archerArrow?: boolean;
 }
 
 /** 전투 시각 이펙트 (스킬/광역 발동 위치 — 퍼지며 사라지는 링). 렌더 전용, 시뮬은 무시 */
@@ -1802,8 +1804,8 @@ export class BattleEngine {
           true,
         );
       } else {
-        // 지면 조준 투사체(투석기): 발사 시점 타깃 위치로 비행 — 이동하면 빗나감
-        this.launchProjectile(attacker, target.x, target.y, false);
+        // 지면 조준 투사체(투석기·궁수): 발사 시점 타깃 위치로 비행 — 이동하면 빗나감
+        this.launchProjectile(attacker, target.x, target.y, false, undefined, undefined, false, attacker.kind === 'archer');
       }
       return;
     }
@@ -1941,6 +1943,7 @@ export class BattleEngine {
     atkOverride?: number,
     homingId?: number,
     arrow?: boolean,
+    archerArrow?: boolean,
   ) {
     let atk = atkOverride ?? attacker.atk;
     if (attacker.frenzyAtkPct > 0 && attacker.hp <= attacker.maxHp * 0.5) {
@@ -1955,7 +1958,7 @@ export class BattleEngine {
       ty,
       speed: attacker.projectileSpeed,
       atk,
-      aoe: arrow ? attacker.aoe : Math.max(attacker.aoe, 1.5), // 영웅 화살=단일 타깃(궁사) / 투석탄=최소 1.5 광역
+      aoe: (arrow || archerArrow) ? attacker.aoe : Math.max(attacker.aoe, 1.5),
       critChance: attacker.critChance,
       burnChance: attacker.burnChance,
       burnPct: attacker.burnPct,
@@ -1964,6 +1967,7 @@ export class BattleEngine {
       targetTower,
       homingId,
       arrow,
+      archerArrow,
     });
   }
 
