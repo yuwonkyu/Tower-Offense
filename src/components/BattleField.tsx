@@ -124,6 +124,10 @@ const ARROW_GLOW = 'rgba(95,185,255,0.45)'; // 영웅 화살 글로우 + 비행 
 const ALLY_STROKE = 'rgba(120,200,255,0.9)';
 const ENEMY_STROKE = 'rgba(255,70,70,0.95)'; // 적 유닛 빨강 테두리 — 아군(시안)과 즉시 구분 (프로토타입 가독성)
 
+// 진영 식별: 유닛 발밑 타원 디스크 — 같은 스프라이트를 써도 팀이 즉시 구분됨 (top-down RTS 표준)
+const ALLY_BASE = 'rgba(60,150,255,0.55)'; // 아군 발밑 — 파랑
+const ENEMY_BASE = 'rgba(235,45,45,0.6)'; // 적 발밑 — 빨강
+
 /** 피격 순간 번쩍 (타격감) */
 const HIT_COLOR = 'rgba(255,255,255,0.95)';
 
@@ -435,6 +439,14 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
         const hw = r * UNIT_SPRITE_SCALE;
         const src = Skia.XYWHRect(0, 0, img.width(), img.height());
         const dst = Skia.XYWHRect(ex - hw, ey - hw, hw * 2, hw * 2);
+        // 팀 베이스 디스크 — 발밑 타원(스프라이트를 가리지 않으면서 진영 즉시 식별)
+        const baseRx = hw * 0.72;
+        const baseRy = hw * 0.3;
+        const baseCy = ey + hw * 0.66;
+        canvas.drawOval(
+          Skia.XYWHRect(ex - baseRx, baseCy - baseRy, baseRx * 2, baseRy * 2),
+          fill(isEnemy ? ENEMY_BASE : ALLY_BASE),
+        );
         if (e.hitFlash > 0) {
           // 피격 번쩍 — 흰색 틴트 (팀 틴트보다 우선)
           const hitP = Skia.Paint();
@@ -444,15 +456,14 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
           canvas.drawImageRect(img, src, dst, hitP);
         } else {
           canvas.drawImageRect(img, src, dst, fill('rgba(0,0,0,1)'));
-          // 적군: 10% 붉은 틴트 — 투명 픽셀은 건드리지 않고 스프라이트 위만 물듦
+          // 적군: 붉은 틴트 강화 — 투명 픽셀은 건드리지 않고 스프라이트 위만 물듦 (베이스 디스크와 함께 진영 구분)
           if (isEnemy) {
             const redP = Skia.Paint();
-            redP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(220,40,40)'), BlendMode.SrcATop));
-            redP.setAlphaf(0.10);
+            redP.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color('rgb(225,40,40)'), BlendMode.SrcATop));
+            redP.setAlphaf(0.24);
             canvas.drawImageRect(img, src, dst, redP);
           }
         }
-        // 팀 구분 링 제거 — 스프라이트 자체로 구분
       }
       // 스프라이트 없는 유닛은 표시 안 함 (미구현 종족 추가 전까지 비어있음)
     };

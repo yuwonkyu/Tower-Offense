@@ -52,7 +52,8 @@ export const BASE_UNITS: UnitDef[] = [
     name: '투석기',
     concept: '광역 공성',
     // 79 / 3.5초 / 360 / 재생10 / 장거리 / 270 / 느림. mechanical 제거(표에 재생 명시) — 회복 가능
-    stats: { atk: 79, def: 5, hp: 360, moveSpeed: 5.0, range: 18, atkSpeed: 0.29, aoe: 5 },
+    // range 18→22: 공성 무기 사거리 확대 (먼 적 우선 타격, CATAPULT_MIN_RANGE와 함께 — 피드백)
+    stats: { atk: 79, def: 5, hp: 360, moveSpeed: 5.0, range: 22, atkSpeed: 0.29, aoe: 5 },
     regenPctPerSec: 2.78,
     projectileSpeed: 20, // 지면 조준 투사체 — 이동 타깃 회피, 정지 목표 명중
     priority: 'tank',

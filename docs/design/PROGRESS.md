@@ -343,6 +343,81 @@
 - (앞서) Phase1: 배경/타워 4단계 요새/영웅 클래스 오라 + 적 빨강 테두리
 
 ### 다음 작업
-- [ ] **이동속도 카드 Lv5 MAX → 공속 +10% 부여** (다음 세션)
+- [x] **이동속도 카드 Lv5 MAX → 공속 +10% 부여** ← 아래 세션에서 완료
 - [ ] 폰 실측: 공성 타깃팅 난이도 체감 / 배경 톤 / 리롤·경제 검증
 - 메모리 저장: [[8race-gacha-design]] · [[generous-economy]] · [[31plus-stage-variance]]
+
+---
+
+## 세션 2026-06-29 — 스프라이트 연결 & 비주얼 문서화
+
+### 에셋 렌더링 연결 (커밋 4cac27b)
+
+#### 영웅 스프라이트 (BattleField.tsx)
+- `assets/game/units/hero_maruhan.png` / `hero_mir.png` / `hero_noeul.png` 신규 import
+- `useImage()` 훅 추가 + `heroImageMap` Record로 영웅 ID → 이미지 매핑
+- 영웅 렌더 로직: 원 fallback → 스프라이트 `drawImageRect` 교체
+  - 죽음: 회색 ColorFilter + 알파 0.6
+  - 피격 플래시: 흰색 ColorFilter + 알파 0.7
+  - 생존: 클래스 오라(더블 원 글로우) + 스프라이트 오버레이
+
+#### 투사체 스프라이트 (BattleField.tsx + engine.ts)
+- `assets/game/projectiles/archer_arrow.png` / `hero_arrow.png` / `stone.png` import
+- **`Projectile` 인터페이스**에 `archerArrow?: boolean` 플래그 추가 (기존 `arrow?: boolean` = 영웅 화살)
+- `launchProjectile()` 시그니처 확장: `archerArrow` 파라미터 추가
+- `performAttack()` 수정: `attacker.kind === 'archer'`일 때 `archerArrow: true` 전달
+- 투사체 렌더:
+  - `arrow` (영웅) → `hero_arrow.png`, 방향각 `canvas.rotate(deg, cx, cy)` 적용
+  - `archerArrow` (궁수) → `archer_arrow.png`, 동일 회전 로직
+  - 그 외 (투석기) → `stone.png`, 회전 불필요(구형)
+
+#### TypeScript 오류 수정
+- `canvas.rotate(deg)` → `canvas.rotate(deg, pivotX, pivotY)` (Skia SkCanvas 3인수 필수)
+- `translate` + `rotate(1arg)` 패턴 제거, 절대좌표 직접 계산으로 대체
+
+### 현재 에셋 상태
+
+| 경로 | 상태 |
+|------|------|
+| `assets/game/units/hero_maruhan.png` | ✅ 렌더 연결 |
+| `assets/game/units/hero_mir.png` | ✅ 렌더 연결 |
+| `assets/game/units/hero_noeul.png` | ✅ 렌더 연결 |
+| `assets/game/projectiles/archer_arrow.png` | ✅ 렌더 연결 |
+| `assets/game/projectiles/hero_arrow.png` | ✅ 렌더 연결 |
+| `assets/game/projectiles/stone.png` | ✅ 렌더 연결 |
+| `assets/game/projectiles/mage_low.png` | ❌ 에셋 없음 |
+| `assets/game/projectiles/mage_mid.png` | ❌ 에셋 없음 |
+| `assets/game/projectiles/mage_high.png` | ❌ 에셋 없음 |
+| `assets/game/enemies/` | ❌ 비어있음 (.gitkeep) |
+| `assets/game/heroes/` | ❌ 비어있음 (.gitkeep) |
+| `assets/game/fx/` | ❌ 비어있음 (.gitkeep) |
+| `assets/game/audio/bgm/` | ❌ 비어있음 |
+| `assets/game/audio/sfx/` | ❌ 비어있음 |
+
+### 마법사 투사체 현황
+- mageLow / mageMid / mageHigh 모두 **hitscan + `spawnTracer()`** 방식 (즉시 타격, 추적자 점만 표시)
+- 투사체 시스템(`Projectile` 인터페이스)을 거치지 않음 → 스프라이트 추가 시 렌더 경로 변경 필요
+- tracer 색상: `rgba(190,130,245,0.95)` (연보라) 공통 사용 중
+- 이미지 생성 프롬프트 → `docs/design/VISUAL_ROADMAP.md` 참조
+
+### 가독성 & 투석기 밸런스 (폰 피드백 — 진영 구분 안 됨)
+
+**진영 식별 (BattleField.tsx)**
+- 문제: 아군·적이 같은 스프라이트 + 10% 붉은 틴트만 → 구분 불가
+- 유닛 발밑에 **팀 베이스 디스크(타원)** 추가 — 아군 파랑 `rgba(60,150,255,0.55)` / 적 빨강 `rgba(235,45,45,0.6)` (top-down RTS 표준, 스프라이트 안 가림)
+- 적군 붉은 틴트 0.10 → **0.24** 강화
+
+**투석기 — 먼 적 우선 (engine.ts + units.ts)**
+- 사거리 `range` 18 → **22** 확대 (`units.ts`)
+- 최소 사거리 `CATAPULT_MIN_RANGE` 6 → **10** (가까운 적 무시)
+- 타깃 스코어: 투석기는 `score = -dist` → **사거리 끝의 먼 적 우선** 포격 (아군·적 양쪽 경로 동일 적용)
+
+**HUD 정리 (EnemyRoster.tsx)**
+- 적 유닛 칩 앞 **색 동그라미(UNIT_DOT) 제거**
+- **인구수 코스트 배지(1/3/5) 제거** — "마법사 3"의 숫자 = supplyCost였음, 혼란만 줘서 삭제
+
+### 다음 작업
+- [ ] 마법사 투사체 이미지 AI 생성 후 `assets/game/projectiles/`에 배치
+- [ ] mage tracer 렌더 경로에 스프라이트 연결 또는 Projectile 시스템으로 전환
+- [ ] 적 유닛 스프라이트 소싱 (`assets/game/enemies/`)
+- [ ] 8방향 스프라이트, 공격/피격 애니메이션, 오라/상태이상 이펙트 → VISUAL_ROADMAP 참조
