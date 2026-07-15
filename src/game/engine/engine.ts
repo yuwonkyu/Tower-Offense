@@ -373,6 +373,8 @@ const SWEEP_CAST = 0.7;
 const ENEMY_DEFEND_RADIUS = 60;
 /** 적 대기 링: 추격 대상 없으면 타워 주변으로 귀환 */
 const ENEMY_GUARD_RING = 8;
+/** 폭탄병 근접 신관: 폭발 반경 × 이 값 안에 적이 들면 추격 멈추고 즉시 자폭 (제자리 흔들·동속 미도달 방지) */
+const BOMBER_FUSE_FACTOR = 0.9;
 /** 적 배회 반경 — 추격 대상 없으면 타워 주변 이 범위를 순찰 (성에만 붙지 않게 — 피드백 4) */
 const ENEMY_ROAM_MIN = 18;
 const ENEMY_ROAM_MAX = 52;
@@ -2536,7 +2538,10 @@ export class BattleEngine {
         this.applyDamage(e, c);
       }
     }
-    this.spawnEffect(e.x, e.y, e.aoe, "rgba(255,140,40,0.95)", 0.4);
+    // 겹친 폭발 연출 — 밝은 코어 섬광 + 주 화염구 + 확산 충격파 링 ('펑펑' 임팩트)
+    this.spawnEffect(e.x, e.y, e.aoe * 0.55, "rgba(255,245,190,0.98)", 0.18); // 코어 섬광
+    this.spawnEffect(e.x, e.y, e.aoe, "rgba(255,140,40,0.95)", 0.4); // 주 화염구
+    this.spawnEffect(e.x, e.y, e.aoe * 1.4, "rgba(255,90,50,0.5)", 0.5); // 확산 충격파
   }
 
   /** 폭탄병: 가장 가까운 상대에게 접근 후 자폭 (자폭 시 EXP 50%) */
@@ -2562,19 +2567,23 @@ export class BattleEngine {
       }
       return;
     }
-    // 근접 신관: 블래스트 반경 근처에 도달하면 터진다 (코앞까지 비비지 않게 — 피드백)
-    const reached = this.moveToward(e, nearest.x, nearest.y, e.aoe * 0.8, dt);
-    if (!reached) {
-      e.state = "moving";
+    // 근접 신관: 폭발 반경 안에 적이 들어오면 추격 멈추고 즉시 자폭한다.
+    // (예전엔 '가장 가까운 적 중심까지 4' 조건이라 ①매 프레임 최근접 대상이 바뀌며
+    //  제자리서 흔들거리거나 ②동속 대상을 마지막 20%까지 못 좁혀 영영 안 터졌음.
+    //  반경 안에 든 순간 터뜨려 확실히 '펑'.)
+    if (nearestDist <= e.aoe * BOMBER_FUSE_FACTOR) {
+      this.explodeBomber(e);
+      e.state = "dead";
+      e.hp = 0;
+      if (e.side === "enemy") {
+        this.kills++;
+        this.gainExp(BOMBER_EXPLODED_EXP);
+      }
       return;
     }
-    this.explodeBomber(e);
-    e.state = "dead";
-    e.hp = 0;
-    if (e.side === "enemy") {
-      this.kills++;
-      this.gainExp(BOMBER_EXPLODED_EXP);
-    }
+    // 아직 멀면 최근접 상대로 직진 (반경 진입 판정은 위 신관이 처리 → stopDist 0)
+    e.state = "moving";
+    this.moveToward(e, nearest.x, nearest.y, 0, dt);
   }
 
   // ── 분산 / 정리 ────────────────────────────────────────
