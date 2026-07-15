@@ -311,6 +311,9 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
   // 모든 엔티티를 단일 Picture에 명령형으로 그린다 (React 재조정 회피)
   const picture = createPicture((canvas: SkCanvas) => {
     const cache = paintCache.current;
+    // 걷기 흔들림용 시간값 (setFrame으로 매 프레임 picture 재생성 → 계속 진행)
+    const nowSec = performance.now() / 1000;
+    const TAU = Math.PI * 2;
     const fill = (color: string): SkPaint => {
       const key = `f|${color}`;
       let p = cache.get(key);
@@ -447,6 +450,7 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
         const src = Skia.XYWHRect(0, 0, img.width(), img.height());
         const dst = Skia.XYWHRect(ex - hw, ey - hw, hw * 2, hw * 2);
         // 팀 베이스 디스크 — 발밑 타원(스프라이트를 가리지 않으면서 진영 즉시 식별)
+        // 흔들림/반전 트랜스폼 '밖'에서 그림 → 그림자는 고정, 발만 뒤뚱거림
         const baseRx = hw * 0.72;
         const baseRy = hw * 0.3;
         const baseCy = ey + hw * 0.66;
@@ -454,6 +458,25 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
           Skia.XYWHRect(ex - baseRx, baseCy - baseRy, baseRx * 2, baseRy * 2),
           fill(isEnemy ? ENEMY_BASE : ALLY_BASE),
         );
+
+        // ── 걷기 뒤뚱 + 좌우 반전 트랜스폼 ──
+        // 아트는 전부 오른쪽 기준 → 적군만 flip. 걷는 중이면 발바닥(baseCy) 피벗으로
+        // 좌우로 기울이고(rotate) 발짝마다 살짝 들어(bob) 와우식 뒤뚱거림.
+        canvas.save();
+        if (e.state === 'moving') {
+          const walkHz = 1.6 + e.moveSpeed * 0.03;             // 이속 빠를수록 빠른 걸음
+          const phase = nowSec * walkHz * TAU + e.id * 1.3;    // id로 유닛마다 위상 어긋남
+          const tiltDeg = 6.5 * Math.sin(phase);              // ±6.5° 좌우 흔들
+          const bob = Math.abs(Math.sin(phase)) * hw * 0.05;  // 발짝마다 살짝 들림
+          canvas.translate(0, -bob);
+          canvas.rotate(tiltDeg, ex, baseCy);
+        }
+        if (isEnemy) {
+          canvas.translate(ex, 0);
+          canvas.scale(-1, 1);
+          canvas.translate(-ex, 0);
+        }
+
         if (e.hitFlash > 0) {
           // 피격 번쩍 — 흰색 틴트 (팀 틴트보다 우선)
           const hitP = Skia.Paint();
@@ -474,6 +497,7 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
           tintP.setAlphaf(isEnemy ? 0.24 : 0.18);
           canvas.drawImageRect(img, src, dst, tintP);
         }
+        canvas.restore();
       }
       // 스프라이트 없는 유닛은 표시 안 함 (미구현 종족 추가 전까지 비어있음)
     };
