@@ -460,7 +460,8 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
         );
 
         // ── 걷기 뒤뚱 + 좌우 반전 트랜스폼 ──
-        // 아트는 전부 오른쪽 기준 → 적군만 flip. 걷는 중이면 발바닥(baseCy) 피벗으로
+        // 아트는 전부 오른쪽 기준. 방사형 필드라 진영이 아니라 실제 수평 이동 방향으로 flip
+        // (성을 향해 왼쪽으로 걸으면 왼쪽을 봄). 걷는 중이면 발바닥(baseCy) 피벗으로
         // 좌우로 기울이고(rotate) 발짝마다 살짝 들어(bob) 와우식 뒤뚱거림.
         canvas.save();
         if (e.state === 'moving') {
@@ -471,7 +472,7 @@ export const BattleField = memo(function BattleField({ config, heroDef, speed, r
           canvas.translate(0, -bob);
           canvas.rotate(tiltDeg, ex, baseCy);
         }
-        if (isEnemy) {
+        if (e.facing === -1) {
           canvas.translate(ex, 0);
           canvas.scale(-1, 1);
           canvas.translate(-ex, 0);

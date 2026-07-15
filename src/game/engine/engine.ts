@@ -155,6 +155,8 @@ export interface CombatEntity {
   retargetCd: number;
   targetId: number;
   state: EntityState;
+  /** 바라보는 방향 (1=오른쪽, -1=왼쪽) — 실제 수평 이동 방향으로 갱신, 스프라이트 좌우 반전용 */
+  facing?: number;
   /** 생성 후 경과 시간(초) — 오래된 유닛은 분산 제외 (성 침범·밀림 방지) */
   age: number;
 
@@ -1730,6 +1732,9 @@ export class BattleEngine {
     const dy = ty - e.y;
     const dist = Math.hypot(dx, dy);
     if (dist <= stopDist) return true;
+    // 수평 이동 방향으로 바라보는 방향 갱신 (데드존으로 거의 수직 접근 시 좌우 떨림 방지)
+    if (dx > 0.4) e.facing = 1;
+    else if (dx < -0.4) e.facing = -1;
     const step = Math.min(e.moveSpeed * dt, dist - stopDist);
     e.x += (dx / dist) * step;
     e.y += (dy / dist) * step;
